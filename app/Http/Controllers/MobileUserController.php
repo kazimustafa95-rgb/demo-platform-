@@ -82,7 +82,6 @@ class MobileUserController extends Controller
                 ]));
             
             $coords = $locationService->geocodeAddress($fullAddress);
-            dd($coords);
             if (!$coords) {
                 return response()->json(['message' => 'Unable to geocode address.'], 422);
             }

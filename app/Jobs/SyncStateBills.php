@@ -17,11 +17,20 @@ class SyncStateBills implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $timeout = 1200;
+
+    public function __construct(
+        protected ?int $maxRecords = null,
+    ) {
+        $this->maxRecords = $this->normalizeLimit($this->maxRecords);
+    }
+
     public function handle(OpenStatesApi $api): void
     {
         $states = Jurisdiction::where('type', 'state')->get();
         $perPage = max(1, (int) config('services.open_states.max_per_page', 20));
         $votingDeadlineHours = (int) Setting::get('voting_deadline_hours', 48);
+        $processed = 0;
 
         foreach ($states as $state) {
             $page = 1;
@@ -65,17 +74,26 @@ class SyncStateBills implements ShouldQueue
 
                     $needsDetails = blank($bill->summary)
                         || blank($bill->bill_text_url)
-                        || blank($bill->related_documents)
-                        || blank($bill->amendments_history)
-                        || blank($bill->introduced_date);
+                        || blank($bill->introduced_date)
+                        || $bill->sponsors === null
+                        || $bill->committees === null
+                        || $bill->related_documents === null
+                        || $bill->amendments_history === null;
 
                     if ($needsDetails) {
                         SyncStateBillDetails::dispatch((string) $externalId);
                     }
+
+                    $processed++;
+
+                    if ($this->limitReached($processed)) {
+                        return;
+                    }
                 }
 
+                $hasMorePages = $this->hasMorePages($response, $page);
                 $page++;
-            } while ($response['pagination']['next_page'] ?? false);
+            } while ($hasMorePages);
         }
     }
 
@@ -115,5 +133,34 @@ class SyncStateBills implements ShouldQueue
         }
 
         return false;
+    }
+
+    private function hasMorePages(array $response, int $currentPage): bool
+    {
+        $pagination = is_array($response['pagination'] ?? null) ? $response['pagination'] : [];
+
+        if (array_key_exists('next_page', $pagination)) {
+            return !blank($pagination['next_page']);
+        }
+
+        $maxPage = (int) ($pagination['max_page'] ?? 0);
+        if ($maxPage > 0) {
+            return $currentPage < $maxPage;
+        }
+
+        $perPage = (int) ($pagination['per_page'] ?? 0);
+        $totalItems = (int) ($pagination['total_items'] ?? 0);
+
+        return $perPage > 0 && $totalItems > ($currentPage * $perPage);
+    }
+
+    private function normalizeLimit(?int $limit): ?int
+    {
+        return $limit && $limit > 0 ? $limit : null;
+    }
+
+    private function limitReached(int $processed): bool
+    {
+        return $this->maxRecords !== null && $processed >= $this->maxRecords;
     }
 }

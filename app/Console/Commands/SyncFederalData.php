@@ -7,6 +7,7 @@ use App\Jobs\SyncFederalAmendments;
 use App\Jobs\SyncFederalBills;
 use App\Jobs\SyncFederalRepresentatives;
 use App\Jobs\SyncStateBills;
+use App\Jobs\SyncStateRepresentatives;
 use App\Jobs\SyncVotingResults;
 use App\Services\CongressGovApi;
 use App\Services\OpenStatesApi;
@@ -16,10 +17,10 @@ class SyncFederalData extends Command
 {
     protected $signature = 'demos:sync-federal
                             {--now : Run jobs synchronously instead of dispatching to the queue}
-                            {--with-state : Also sync state bills}
-                            {--limit= : Max number of top-level federal records to sync per feed for testing}';
+                            {--with-state : Also sync state bills and representatives}
+                            {--limit= : Max number of top-level records to sync per enabled feed for testing}';
 
-    protected $description = 'Sync federal legislative data, and optionally state bills, from upstream APIs';
+    protected $description = 'Sync legislative data, and optionally state data, from upstream APIs';
 
     public function handle(): int
     {
@@ -32,25 +33,28 @@ class SyncFederalData extends Command
             config(['queue.default' => 'sync']);
 
             try {
-                $this->line('Running SyncFederalBills inline...');
-                (new SyncFederalBills($maxRecords))->handle(app(CongressGovApi::class));
+                // $this->line('Running SyncFederalBills inline...');
+                // (new SyncFederalBills($maxRecords))->handle(app(CongressGovApi::class));
 
-                $this->line('Running SyncFederalAmendments inline...');
-                (new SyncFederalAmendments($maxRecords))->handle(app(CongressGovApi::class));
+                // $this->line('Running SyncFederalAmendments inline...');
+                // (new SyncFederalAmendments($maxRecords))->handle(app(CongressGovApi::class));
 
-                $this->line('Running SyncFederalRepresentatives inline...');
-                (new SyncFederalRepresentatives($maxRecords))->handle(app(CongressGovApi::class));
+                // $this->line('Running SyncFederalRepresentatives inline...');
+                // (new SyncFederalRepresentatives($maxRecords))->handle(app(CongressGovApi::class));
 
                 if ($this->option('with-state')) {
                     $this->line('Running SyncStateBills inline...');
-                    app(SyncStateBills::class)->handle(app(OpenStatesApi::class));
+                    (new SyncStateBills($maxRecords))->handle(app(OpenStatesApi::class));
+
+                    $this->line('Running SyncStateRepresentatives inline...');
+                    (new SyncStateRepresentatives($maxRecords))->handle(app(OpenStatesApi::class));
                 }
 
-                $this->line('Running SyncVotingResults inline...');
-                (new SyncVotingResults($maxRecords))->handle(app(CongressGovApi::class));
+                // $this->line('Running SyncVotingResults inline...');
+                // (new SyncVotingResults($maxRecords))->handle(app(CongressGovApi::class));
 
-                $this->line('Running MaintainCommunityEngagement inline...');
-                app(MaintainCommunityEngagement::class)->handle();
+                // $this->line('Running MaintainCommunityEngagement inline...');
+                // app(MaintainCommunityEngagement::class)->handle();
             } finally {
                 config(['queue.default' => $originalQueue]);
             }
@@ -62,7 +66,8 @@ class SyncFederalData extends Command
             MaintainCommunityEngagement::dispatch();
 
             if ($this->option('with-state')) {
-                SyncStateBills::dispatch();
+                SyncStateBills::dispatch($maxRecords);
+                SyncStateRepresentatives::dispatch($maxRecords);
             }
 
             $this->line('Jobs dispatched to queue.');
@@ -70,7 +75,7 @@ class SyncFederalData extends Command
         }
 
         if ($maxRecords !== null) {
-            $this->info("Top-level record limit applied per federal feed: {$maxRecords}");
+            $this->info("Top-level record limit applied per enabled feed: {$maxRecords}");
         }
 
         $this->info('Legislative sync kicked off.');

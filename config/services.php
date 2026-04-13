@@ -44,6 +44,9 @@ return [
         'api_key' => env('OPENSTATES_API_KEY'),
         'max_per_page' => env('OPENSTATES_MAX_PER_PAGE', 20),
         'request_interval_ms' => env('OPENSTATES_REQUEST_INTERVAL_MS', 6500),
+        'timeout_seconds' => env('OPENSTATES_TIMEOUT_SECONDS', 60),
+        'connect_timeout_seconds' => env('OPENSTATES_CONNECT_TIMEOUT_SECONDS', 15),
+        'retry_delay_ms' => env('OPENSTATES_RETRY_DELAY_MS', 1500),
     ],
 
     'google_maps' => [

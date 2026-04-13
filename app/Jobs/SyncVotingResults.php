@@ -95,17 +95,14 @@ class SyncVotingResults implements ShouldQueue
                         if ($memberVotes === []) {
                             continue;
                         }
-                        dd($voteTarget['type']);
                         if ($voteTarget['type'] === 'bill') {
                             $this->updateBillVoteMetadata($voteTarget['bill'], $houseVote, $votingDeadlineHours);
                         }
 
                         $rollCallId = (string) ($houseVote['identifier'] ?? ($congress . '-' . $voteSession . '-' . $voteNumber));
                         $voteDate = $houseVote['startDate'] ?? null;
-                        dd($houseVote);
                         foreach ($memberVotes as $memberVote) {
                             $bioguideId = trim((string) ($memberVote['bioguideID'] ?? $memberVote['bioguideId'] ?? ''));
-                            dd($memberVote);
                             if ($bioguideId === '') {
                                 continue;
                             }

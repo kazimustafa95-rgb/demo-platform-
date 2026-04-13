@@ -19,7 +19,7 @@ class LocationService
             'address' => $address,
             'key' => $this->googleMapsKey,
         ]);
-        dd($response->json());
+
         if ($response->failed() || $response->json('status') !== 'OK') {
             return null;
         }
@@ -48,7 +48,7 @@ class LocationService
 
             $role = $person['current_role'];
 
-            if (($role['org_classification'] ?? '') !== 'legislature') {
+            if (!in_array($role['org_classification'] ?? '', ['legislature', 'lower', 'upper'], true)) {
                 continue;
             }
 

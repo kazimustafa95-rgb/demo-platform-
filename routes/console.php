@@ -13,6 +13,10 @@ Schedule::command('demos:sync-federal --now')
     ->hourly()
     ->withoutOverlapping();
 
+Schedule::command('demos:sync-federal --now --with-state')
+    ->dailyAt('02:00')
+    ->withoutOverlapping();
+
 Schedule::call(fn () => app(MaintainCommunityEngagement::class)->handle())
     ->name('maintain-community-engagement')
     ->everyFifteenMinutes()

@@ -9,8 +9,9 @@ class Amendment extends Model
 {
     use HasFactory;
 
-    public const SOURCE_USER = 'congress_gov';
+    public const SOURCE_USER = 'user';
     public const SOURCE_CONGRESS_GOV = 'congress_gov';
+    public const SOURCE_OPENSTATES = 'openstates';
 
     protected $fillable = [
         'external_id',
@@ -79,7 +80,9 @@ class Amendment extends Model
 
     public function scopeImported($query)
     {
-        return $query->where('source', self::SOURCE_CONGRESS_GOV);
+        return $query->whereIn('source', [
+            self::SOURCE_CONGRESS_GOV,
+            self::SOURCE_OPENSTATES,
+        ]);
     }
 }
-

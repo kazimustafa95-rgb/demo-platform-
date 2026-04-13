@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -11,6 +12,9 @@ class OpenStatesApi
     protected string $baseUrl = 'https://v3.openstates.org/';
     protected int $maxPerPage;
     protected int $requestIntervalMs;
+    protected int $timeoutSeconds;
+    protected int $connectTimeoutSeconds;
+    protected int $retryDelayMs;
     protected static float $lastRequestAt = 0.0;
 
     public function __construct()
@@ -18,6 +22,9 @@ class OpenStatesApi
         $this->apiKey = config('services.open_states.api_key');
         $this->maxPerPage = max(1, (int) config('services.open_states.max_per_page', 20));
         $this->requestIntervalMs = max(0, (int) config('services.open_states.request_interval_ms', 6500));
+        $this->timeoutSeconds = max(1, (int) config('services.open_states.timeout_seconds', 60));
+        $this->connectTimeoutSeconds = max(1, (int) config('services.open_states.connect_timeout_seconds', 15));
+        $this->retryDelayMs = max(0, (int) config('services.open_states.retry_delay_ms', 1500));
     }
 
     public function getBills($jurisdiction, $session = null, $page = 1, $perPage = 50)
@@ -34,15 +41,41 @@ class OpenStatesApi
 
     public function getBill($id)
     {
-        return $this->request('bills/' . $id, [], 'bill detail');
+        return $this->request(
+            'bills/' . rawurlencode((string) $id),
+            [
+                'include' => $this->normalizeInclude([
+                    'abstracts',
+                    'actions',
+                    'sponsorships',
+                    'documents',
+                    'versions',
+                    'related_bills',
+                    'sources',
+                ]),
+            ],
+            'bill detail'
+        );
     }
 
-    public function getLegislators($jurisdiction, $chamber = null, $page = 1, $perPage = 50)
+    public function getPerson($id, array $include = [])
+    {
+        return $this->request(
+            'people/' . rawurlencode((string) $id),
+            [
+                'include' => $this->normalizeInclude($include),
+            ],
+            'person detail'
+        );
+    }
+
+    public function getLegislators($jurisdiction, $chamber = null, $page = 1, $perPage = 50, array $include = [])
     {
         $params = [
             'jurisdiction' => $jurisdiction,
             'page' => $page,
             'per_page' => max(1, min((int) $perPage, $this->maxPerPage)),
+            'include' => $this->normalizeInclude($include),
         ];
 
         if ($chamber) {
@@ -77,8 +110,25 @@ class OpenStatesApi
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             $this->throttle();
 
-            $response = Http::withHeaders(['X-API-Key' => $this->apiKey])
-                ->get($this->baseUrl . ltrim($endpoint, '/'), array_filter($params, fn ($value) => $value !== null));
+            try {
+                $response = Http::withHeaders(['X-API-Key' => $this->apiKey])
+                    ->acceptJson()
+                    ->connectTimeout($this->connectTimeoutSeconds)
+                    ->timeout($this->timeoutSeconds)
+                    ->get($this->buildUrl($endpoint, $params));
+            } catch (ConnectionException $exception) {
+                Log::warning("OpenStates API connection error ({$context}): " . $exception->getMessage(), [
+                    'endpoint' => $endpoint,
+                    'attempt' => $attempt,
+                ]);
+
+                if ($attempt < $maxAttempts && $this->retryDelayMs > 0) {
+                    usleep($this->retryDelayMs * 1000);
+                    continue;
+                }
+
+                return null;
+            }
 
             if ($response->status() === 429 && $attempt < $maxAttempts) {
                 $retryAfter = max(
@@ -121,5 +171,41 @@ class OpenStatesApi
         }
 
         self::$lastRequestAt = microtime(true);
+    }
+
+    private function normalizeInclude(array $include): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            fn (mixed $value) => is_string($value) ? trim($value) : null,
+            $include
+        ))));
+    }
+
+    private function buildUrl(string $endpoint, array $params): string
+    {
+        $base = $this->baseUrl . ltrim($endpoint, '/');
+        $pairs = [];
+
+        foreach ($params as $key => $value) {
+            if ($value === null || $value === [] || $value === '') {
+                continue;
+            }
+
+            if (is_array($value)) {
+                foreach ($value as $item) {
+                    if ($item === null || $item === '') {
+                        continue;
+                    }
+
+                    $pairs[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $item);
+                }
+
+                continue;
+            }
+
+            $pairs[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $value);
+        }
+
+        return $pairs === [] ? $base : $base . '?' . implode('&', $pairs);
     }
 }
