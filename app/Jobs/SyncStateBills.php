@@ -33,12 +33,20 @@ class SyncStateBills implements ShouldQueue
         $processed = 0;
 
         foreach ($states as $state) {
+            if ($api->isQuotaExceeded()) {
+                return;
+            }
+
             $page = 1;
 
             do {
                 $response = $api->getBills($state->code, null, $page, $perPage);
 
                 if (!$response || !isset($response['results'])) {
+                    if ($api->isQuotaExceeded()) {
+                        return;
+                    }
+
                     break;
                 }
 

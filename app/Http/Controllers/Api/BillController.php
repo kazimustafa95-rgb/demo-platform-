@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Amendment;
 use App\Models\Bill;
 use App\Models\UserVote;
+use App\Services\BillInsightsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -79,8 +80,8 @@ class BillController extends Controller
     {
         $user = $request->user();
         
-        if (!$user->email_verified_at) {
-            return response()->json(['message' => 'You must be verified to vote.'], 403);
+        if (!$user->isVerifiedConstituent()) {
+            return response()->json(['message' => 'You must complete constituent verification before voting.'], 403);
         }
         
         if (!$bill->isVotingOpen()) {
@@ -133,5 +134,18 @@ class BillController extends Controller
         }
 
         return response()->json(['message' => 'Vote removed.']);
+    }
+
+    public function insights(Request $request, Bill $bill, BillInsightsService $billInsightsService)
+    {
+        $user = $request->user();
+
+        if (!$user->hasCompletedLocation()) {
+            return response()->json([
+                'message' => 'Complete location verification before viewing district insights.',
+            ], 422);
+        }
+
+        return response()->json($billInsightsService->build($bill, $user));
     }
 }

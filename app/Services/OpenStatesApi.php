@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class OpenStatesApi
 {
+    private const QUOTA_CACHE_KEY = 'openstates:quota_exceeded_until';
+
     protected string $apiKey;
     protected string $baseUrl = 'https://v3.openstates.org/';
     protected int $maxPerPage;
@@ -99,12 +103,26 @@ class OpenStatesApi
             'lat' => $lat,
             'lng' => $lng,
         ], 'geo lookup');
-
+        
         return $response['results'] ?? [];
+    }
+
+    public function isQuotaExceeded(): bool
+    {
+        $until = Cache::get(self::QUOTA_CACHE_KEY);
+        
+        if (blank($until)) {
+            return false;
+        }
+        return now()->lt(Carbon::parse((string) $until));
     }
 
     private function request(string $endpoint, array $params, string $context): ?array
     {
+        if ($this->isQuotaExceeded()) {
+            return null;
+        }
+
         $maxAttempts = 3;
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
@@ -126,6 +144,12 @@ class OpenStatesApi
                     usleep($this->retryDelayMs * 1000);
                     continue;
                 }
+
+                return null;
+            }
+
+            if ($response->status() === 429 && $this->isDailyLimitExceeded($response->body())) {
+                $this->markQuotaExceeded($response->body(), $endpoint, $context);
 
                 return null;
             }
@@ -207,5 +231,31 @@ class OpenStatesApi
         }
 
         return $pairs === [] ? $base : $base . '?' . implode('&', $pairs);
+    }
+
+    private function isDailyLimitExceeded(string $body): bool
+    {
+        $normalized = strtolower($body);
+
+        return str_contains($normalized, 'exceeded limit')
+            || (str_contains($normalized, '/day') && str_contains($normalized, 'detail'));
+    }
+
+    private function markQuotaExceeded(string $body, string $endpoint, string $context): void
+    {
+        if ($this->isQuotaExceeded()) {
+            return;
+        }
+
+        $until = now()->endOfDay();
+
+        Cache::put(self::QUOTA_CACHE_KEY, $until->toISOString(), $until);
+
+        Log::warning('OpenStates daily quota exhausted; skipping additional requests until reset.', [
+            'context' => $context,
+            'endpoint' => $endpoint,
+            'retry_available_after' => $until->toISOString(),
+            'detail' => $body,
+        ]);
     }
 }

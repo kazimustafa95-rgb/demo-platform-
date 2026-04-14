@@ -30,6 +30,10 @@ class SyncStateRepresentatives implements ShouldQueue
         $processed = 0;
 
         foreach ($states as $state) {
+            if ($api->isQuotaExceeded()) {
+                return;
+            }
+
             $page = 1;
 
             do {
@@ -40,6 +44,10 @@ class SyncStateRepresentatives implements ShouldQueue
                 ]);
 
                 if (!$response || !isset($response['results'])) {
+                    if ($api->isQuotaExceeded()) {
+                        return;
+                    }
+
                     break;
                 }
 

@@ -53,4 +53,18 @@ return [
         'api_key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
+    'district_population' => [
+        'provider' => env('DISTRICT_POPULATION_PROVIDER', 'manual'),
+        'api_key' => env('DISTRICT_POPULATION_API_KEY'),
+        'base_url' => env('DISTRICT_POPULATION_BASE_URL'),
+    ],
+
+    'identity_verification' => [
+        'provider' => env('IDENTITY_VERIFICATION_PROVIDER', 'manual'),
+        'persona_api_key' => env('PERSONA_API_KEY'),
+        'idenfy_api_key' => env('IDENFY_API_KEY'),
+        'veryfi_client_id' => env('VERYFI_CLIENT_ID'),
+        'veryfi_api_key' => env('VERYFI_API_KEY'),
+    ],
+
 ];

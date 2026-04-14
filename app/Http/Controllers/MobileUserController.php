@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\LocationService;
+use App\Services\OpenStatesApi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
@@ -102,10 +103,32 @@ class MobileUserController extends Controller
             }
         }
 
-        $districts = $locationService->getDistrictsFromLocation($latitude, $longitude);
+        $districtLookupAddress = implode(', ', array_filter([
+            $locationFields['street_address'],
+            $locationFields['district'],
+            $locationFields['state'],
+            $locationFields['country'],
+            $locationFields['zip_code'],
+        ]));
 
+        $districts = $locationService->getDistrictsFromLocation(
+            $latitude,
+            $longitude,
+            $districtLookupAddress !== '' ? $districtLookupAddress : null
+        );
         if (!$districts['federal_district'] || !$districts['state_district']) {
-            return response()->json(['message' => 'Unable to determine legislative districts for this location.'], 422);
+            $openStates = app(OpenStatesApi::class);
+
+            return response()->json([
+                'message' => 'Unable to determine legislative districts for this location.',
+                'districts' => $districts,
+                'diagnostics' => [
+                    'google_civic_partial_match' => filled($districts['federal_district'] ?? null)
+                        && blank($districts['state_district'] ?? null),
+                    'openstates_quota_exceeded' => $openStates->isQuotaExceeded(),
+                    'openstates_retry_available_after' => cache()->get('openstates:quota_exceeded_until'),
+                ],
+            ], 422);
         }
 
         $user->update([

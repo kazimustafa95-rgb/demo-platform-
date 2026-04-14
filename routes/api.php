@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/bills/{bill}/vote', [BillController::class, 'vote']);
     Route::delete('/bills/{bill}/vote', [BillController::class, 'deleteVote']);
+    Route::get('/bills/{bill}/insights', [BillController::class, 'insights']);
 
     Route::post('/bills/{bill}/amendments', [AmendmentController::class, 'store']);
     Route::post('/amendments/{amendment}/support', [AmendmentController::class, 'support']);

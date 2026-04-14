@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Notifications\MobileEmailVerificationCodeNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
@@ -19,6 +20,7 @@ class MobileAuthApiTest extends TestCase
         parent::setUp();
 
         config()->set('services.open_states.request_interval_ms', 0);
+        config()->set('services.google_maps.api_key', 'test-google-key');
     }
 
     public function test_user_can_register_verify_email_and_receive_access_token(): void
@@ -362,5 +364,190 @@ class MobileAuthApiTest extends TestCase
         $this->assertSame('Washington', $user->district);
         $this->assertSame('1600 Pennsylvania Avenue NW', $user->address);
         $this->assertSame('20500', $user->zip_code);
+    }
+
+    public function test_location_verification_uses_google_civic_divisions_when_available(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 41.8781,
+                                'lng' => -87.6298,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'IL',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/state:il/cd:7' => [
+                        'name' => 'Illinois Congressional District 7',
+                    ],
+                    'ocd-division/country:us/state:il/sldl:5' => [
+                        'name' => 'Illinois House District 5',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'Illinois',
+            'district' => 'Chicago',
+            'street_address' => '121 N LaSalle St',
+            'zip_code' => '60602',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'districts' => [
+                    'federal_district' => '7',
+                    'state_district' => 'IL-5',
+                    'source' => 'google_civic',
+                ],
+            ]);
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_location_verification_merges_partial_google_civic_result_with_openstates_fallback(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 38.8977,
+                                'lng' => -77.0365,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/district:dc' => [
+                        'name' => 'District of Columbia',
+                    ],
+                ],
+            ]),
+            'https://v3.openstates.org/people.geo*' => Http::response([
+                'results' => [
+                    [
+                        'current_role' => [
+                            'org_classification' => 'legislature',
+                            'jurisdiction' => 'ocd-jurisdiction/country:us/state:dc/government',
+                            'district' => '2',
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'District of Columbia',
+            'district' => 'Washington',
+            'street_address' => '1600 Pennsylvania Avenue NW',
+            'zip_code' => '20500',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'districts' => [
+                    'federal_district' => 'At-Large',
+                    'state_district' => 'DC-2',
+                    'state_code' => 'DC',
+                    'source' => 'google_civic+open_states',
+                ],
+            ]);
+    }
+
+    public function test_location_verification_returns_quota_diagnostics_when_fallback_is_blocked(): void
+    {
+        Cache::put('openstates:quota_exceeded_until', '2026-04-13T23:59:59.999999Z', now()->addHour());
+
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 38.8977,
+                                'lng' => -77.0365,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/district:dc' => [
+                        'name' => 'District of Columbia',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'District of Columbia',
+            'district' => 'Washington',
+            'street_address' => '1600 Pennsylvania Avenue NW',
+            'zip_code' => '20500',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Unable to determine legislative districts for this location.',
+                'districts' => [
+                    'federal_district' => 'At-Large',
+                    'state_district' => null,
+                    'state_code' => 'DC',
+                    'source' => 'google_civic+open_states',
+                ],
+                'diagnostics' => [
+                    'google_civic_partial_match' => true,
+                    'openstates_quota_exceeded' => true,
+                    'openstates_retry_available_after' => '2026-04-13T23:59:59.999999Z',
+                ],
+            ]);
     }
 }
