@@ -10,12 +10,12 @@ return new class extends Migration
     {
         Schema::create('bills', function (Blueprint $table) {
             $table->id();
-            $table->string('external_id')->unique();
+            $table->string('external_id', 191)->unique();
             $table->foreignId('jurisdiction_id')->constrained();
             $table->string('number');
             $table->string('title');
             $table->text('summary')->nullable();
-            $table->string('status');
+            $table->string('status', 64);
             $table->dateTime('introduced_date')->nullable();
             $table->dateTime('official_vote_date')->nullable();
             $table->dateTime('voting_deadline')->nullable();

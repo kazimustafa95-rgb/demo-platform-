@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('bill_id')->constrained()->onDelete('cascade');
             $table->foreignId('representative_id')->constrained()->onDelete('cascade');
             $table->string('vote');
-            $table->string('roll_call_id')->nullable();
+            $table->string('roll_call_id', 191)->nullable();
             $table->dateTime('vote_date')->nullable();
             $table->timestamps();
 

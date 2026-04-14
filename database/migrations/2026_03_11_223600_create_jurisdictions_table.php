@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('jurisdictions', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('type'); // federal or state
-            $table->string('code')->nullable(); // e.g. TX
+            $table->string('type', 32); // federal or state
+            $table->string('code', 16)->nullable(); // e.g. TX
             $table->timestamps();
         });
     }

@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('representatives', function (Blueprint $table) {
             $table->id();
-            $table->string('external_id')->unique();
+            $table->string('external_id', 191)->unique();
             $table->string('first_name');
             $table->string('last_name');
             $table->string('party')->nullable();

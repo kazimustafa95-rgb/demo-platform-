@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('amendments', function (Blueprint $table) {
-            $table->string('external_id')->nullable()->after('id');
-            $table->string('source')->default('user')->after('external_id');
+            $table->string('external_id', 191)->nullable()->after('id');
+            $table->string('source', 32)->default('user')->after('external_id');
             $table->unsignedInteger('congress')->nullable()->after('bill_id');
             $table->string('amendment_type')->nullable()->after('congress');
             $table->string('amendment_number')->nullable()->after('amendment_type');

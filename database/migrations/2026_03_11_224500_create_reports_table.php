@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->morphs('reportable');
+            $table->string('reportable_type', 125);
+            $table->unsignedBigInteger('reportable_id');
+            $table->index(['reportable_type', 'reportable_id']);
             $table->string('reason');
             $table->text('description')->nullable();
             $table->string('status')->default('pending');
