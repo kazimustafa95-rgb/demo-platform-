@@ -17,6 +17,9 @@ Schedule::command('demos:sync-federal --with-state')
     ->dailyAt('02:00')
     ->withoutOverlapping();
 
+Schedule::command('horizon:snapshot')
+    ->everyFiveMinutes();
+
 Schedule::call(function (): void {
     app(MaintainCommunityEngagement::class)->handle();
 })

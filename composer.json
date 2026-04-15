@@ -10,6 +10,7 @@
         "filament/filament": "^5.3",
         "guzzlehttp/guzzle": "^7.10",
         "laravel/framework": "^12.0",
+        "laravel/horizon": "^5.45",
         "laravel/jetstream": "^5.5",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
