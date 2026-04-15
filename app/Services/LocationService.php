@@ -40,9 +40,16 @@ class LocationService
             return $civicDistricts;
         }
 
+        $representativeDistricts = $this->getDistrictsFromGoogleRepresentatives($address);
+        $googleDistricts = $this->mergeDistrictResults($civicDistricts, $representativeDistricts);
+
+        if ($this->hasRequiredDistricts($googleDistricts)) {
+            return $googleDistricts;
+        }
+
         $openStatesDistricts = $this->getDistrictsFromOpenStates($lat, $lng);
 
-        return $this->mergeDistrictResults($civicDistricts, $openStatesDistricts);
+        return $this->mergeDistrictResults($googleDistricts, $openStatesDistricts);
     }
 
     private function getDistrictsFromGoogleCivic(?string $address): array
@@ -64,12 +71,49 @@ class LocationService
             return $this->emptyDistrictResult();
         }
 
-        $stateCode = strtoupper(trim((string) ($response->json('normalizedInput.state') ?? '')));
+        return $this->extractDistrictsFromGoogleDivisions(
+            (array) $response->json('divisions', []),
+            (string) ($response->json('normalizedInput.state') ?? ''),
+            'google_civic'
+        );
+    }
+
+    private function getDistrictsFromGoogleRepresentatives(?string $address): array
+    {
+        if (blank($this->googleMapsKey) || blank($address)) {
+            return $this->emptyDistrictResult();
+        }
+
+        try {
+            $response = Http::get('https://www.googleapis.com/civicinfo/v2/representatives', [
+                'address' => $address,
+                'includeOffices' => 'false',
+                'key' => $this->googleMapsKey,
+            ]);
+        } catch (ConnectionException) {
+            return $this->emptyDistrictResult();
+        }
+
+        if ($response->failed()) {
+            return $this->emptyDistrictResult();
+        }
+
+        return $this->extractDistrictsFromGoogleDivisions(
+            (array) $response->json('divisions', []),
+            (string) ($response->json('normalizedInput.state') ?? ''),
+            'google_civic_representatives'
+        );
+    }
+
+    private function extractDistrictsFromGoogleDivisions(array $divisions, string $normalizedState, string $source): array
+    {
+        $stateCode = strtoupper(trim($normalizedState));
         $federalDistrict = null;
         $stateLowerDistrict = null;
         $stateUpperDistrict = null;
+        $stateAlternativeDistrict = null;
 
-        foreach ((array) $response->json('divisions', []) as $divisionId => $division) {
+        foreach ($divisions as $divisionId => $division) {
             $aliases = is_array($division['alsoKnownAs'] ?? null) ? $division['alsoKnownAs'] : [];
 
             foreach (array_merge([(string) $divisionId], $aliases) as $ocdId) {
@@ -95,16 +139,25 @@ class LocationService
                     $stateCode = $stateCode !== '' ? $stateCode : strtoupper($matches[1]);
                     $stateUpperDistrict = $matches[2];
                 }
+
+                if ($stateAlternativeDistrict === null && preg_match(
+                    '/\/state:([a-z]{2})\/(?:ward|council_district|district):([^\/]+)$/i',
+                    $ocdId,
+                    $matches
+                )) {
+                    $stateCode = $stateCode !== '' ? $stateCode : strtoupper($matches[1]);
+                    $stateAlternativeDistrict = $matches[2];
+                }
             }
         }
 
-        $stateDistrict = $stateLowerDistrict ?? $stateUpperDistrict;
+        $stateDistrict = $stateLowerDistrict ?? $stateUpperDistrict ?? $stateAlternativeDistrict;
 
         return [
             'federal_district' => $federalDistrict,
             'state_district' => $stateDistrict && $stateCode !== '' ? ($stateCode . '-' . $stateDistrict) : null,
             'state_code' => $stateCode !== '' ? $stateCode : null,
-            'source' => 'google_civic',
+            'source' => $source,
         ];
     }
 

@@ -9,15 +9,17 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('demos:sync-federal --now')
+Schedule::command('demos:sync-federal')
     ->hourly()
     ->withoutOverlapping();
 
-Schedule::command('demos:sync-federal --now --with-state')
+Schedule::command('demos:sync-federal --with-state')
     ->dailyAt('02:00')
     ->withoutOverlapping();
 
-Schedule::call(fn () => app(MaintainCommunityEngagement::class)->handle())
+Schedule::call(function (): void {
+    app(MaintainCommunityEngagement::class)->handle();
+})
     ->name('maintain-community-engagement')
     ->everyFifteenMinutes()
     ->withoutOverlapping();

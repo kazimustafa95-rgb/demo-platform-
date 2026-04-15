@@ -450,6 +450,12 @@ class MobileAuthApiTest extends TestCase
                     ],
                 ],
             ]),
+            'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [],
+            ]),
             'https://v3.openstates.org/people.geo*' => Http::response([
                 'results' => [
                     [
@@ -484,14 +490,79 @@ class MobileAuthApiTest extends TestCase
                     'federal_district' => 'At-Large',
                     'state_district' => 'DC-2',
                     'state_code' => 'DC',
-                    'source' => 'google_civic+open_states',
+                    'source' => 'google_civic+google_civic_representatives+open_states',
+                ],
+            ]);
+    }
+
+    public function test_location_verification_uses_google_representatives_when_divisions_are_partial(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 38.8977,
+                                'lng' => -77.0365,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/district:dc' => [
+                        'name' => 'District of Columbia',
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/state:dc/ward:2' => [
+                        'name' => 'Ward 2',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'District of Columbia',
+            'district' => 'Washington',
+            'street_address' => '1600 Pennsylvania Avenue NW',
+            'zip_code' => '20500',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'districts' => [
+                    'federal_district' => 'At-Large',
+                    'state_district' => 'DC-2',
+                    'state_code' => 'DC',
+                    'source' => 'google_civic+google_civic_representatives',
                 ],
             ]);
     }
 
     public function test_location_verification_returns_quota_diagnostics_when_fallback_is_blocked(): void
     {
-        Cache::put('openstates:quota_exceeded_until', '2026-04-13T23:59:59.999999Z', now()->addHour());
+        $quotaUntil = now()->addHour()->toISOString();
+        Cache::put('openstates:quota_exceeded_until', $quotaUntil, now()->addHour());
 
         Http::fake([
             'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
@@ -517,6 +588,12 @@ class MobileAuthApiTest extends TestCase
                     ],
                 ],
             ]),
+            'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [],
+            ]),
         ]);
 
         $user = User::factory()->create([
@@ -541,12 +618,12 @@ class MobileAuthApiTest extends TestCase
                     'federal_district' => 'At-Large',
                     'state_district' => null,
                     'state_code' => 'DC',
-                    'source' => 'google_civic+open_states',
+                    'source' => 'google_civic+google_civic_representatives+open_states',
                 ],
                 'diagnostics' => [
                     'google_civic_partial_match' => true,
                     'openstates_quota_exceeded' => true,
-                    'openstates_retry_available_after' => '2026-04-13T23:59:59.999999Z',
+                    'openstates_retry_available_after' => $quotaUntil,
                 ],
             ]);
     }
