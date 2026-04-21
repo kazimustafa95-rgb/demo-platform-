@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Bill;
 use App\Models\CitizenProposal;
 use App\Models\Setting;
+use App\Rules\ValidJurisdictionFocus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -45,18 +46,25 @@ class CitizenProposalController extends Controller
             return response()->json(['message' => 'You must complete constituent verification before submitting proposals.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'category' => 'required|string',
-            'jurisdiction_focus' => 'required|string|max:10',
+        $input = [
+            'title' => trim((string) $request->input('title')),
+            'content' => trim((string) $request->input('content')),
+            'category' => trim((string) $request->input('category')),
+            'jurisdiction_focus' => $this->normalizeJurisdictionFocus($request->input('jurisdiction_focus')),
+        ];
+
+        $validator = Validator::make($input, [
+            'title' => ['required', 'string', 'min:5', 'max:255'],
+            'content' => ['required', 'string', 'min:30', 'max:5000'],
+            'category' => ['required', 'string', 'min:2', 'max:100'],
+            'jurisdiction_focus' => ['required', 'string', new ValidJurisdictionFocus()],
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
-        $rawFocus = trim((string) $request->jurisdiction_focus);
+        $rawFocus = $input['jurisdiction_focus'];
         $lowerFocus = strtolower($rawFocus);
         $focusForStorage = $rawFocus;
 
@@ -92,7 +100,7 @@ class CitizenProposalController extends Controller
 
         foreach ($bills as $bill) {
             $referenceText = trim(($bill->title ?? '') . ' ' . ($bill->summary ?? ''));
-            $similar = similar_text((string) $request->content, $referenceText, $percent);
+            $similar = similar_text($input['content'], $referenceText, $percent);
 
             if ($percent >= $duplicateThreshold) {
                 return response()->json([
@@ -104,9 +112,9 @@ class CitizenProposalController extends Controller
 
         $proposal = CitizenProposal::create([
             'user_id' => $user->id,
-            'title' => $request->title,
-            'content' => $request->content,
-            'category' => $request->category,
+            'title' => $input['title'],
+            'content' => $input['content'],
+            'category' => $input['category'],
             'jurisdiction_focus' => $focusForStorage,
             'support_count' => 0,
         ]);
@@ -178,5 +186,20 @@ class CitizenProposalController extends Controller
         $proposal->refresh();
 
         return response()->json(['message' => 'Support removed.', 'support_count' => $proposal->support_count]);
+    }
+
+    private function normalizeJurisdictionFocus(mixed $value): string
+    {
+        $focus = trim((string) $value);
+
+        if ($focus === '') {
+            return '';
+        }
+
+        if (preg_match('/^[A-Za-z]{2}$/', $focus)) {
+            return strtoupper($focus);
+        }
+
+        return strtolower($focus);
     }
 }

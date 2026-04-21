@@ -9,6 +9,11 @@ class Bill extends Model
 {
     use HasFactory;
 
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_VOTING_CLOSED = 'voting_closed';
+    public const STATUS_PASSED = 'passed';
+    public const STATUS_FAILED = 'failed';
+
     protected $fillable = [
         'external_id',
         'jurisdiction_id',
@@ -56,10 +61,19 @@ class Bill extends Model
         return $this->hasMany(Amendment::class);
     }
 
+    public static function statusOptions(): array
+    {
+        return [
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_VOTING_CLOSED => 'Voting Closed',
+            self::STATUS_PASSED => 'Passed',
+            self::STATUS_FAILED => 'Failed',
+        ];
+    }
+
     public function isVotingOpen(): bool
     {
         
         return (bool) ($this->voting_deadline && now()->lt($this->voting_deadline));
     }
 }
-

@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Amendment;
 use App\Models\Bill;
 use App\Models\UserVote;
+use App\Rules\WordCountBetween;
 use App\Services\BillInsightsService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 
 class BillController extends Controller
@@ -95,23 +97,14 @@ class BillController extends Controller
             return response()->json(['message' => 'Voting is closed for this bill.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'vote' => 'required|in:in_favor,against,abstain',
-            'comment' => [
-                'nullable',
-                'string',
-                function (string $attribute, mixed $value, \Closure $fail): void {
-                    if ($value === null || $value === '') {
-                        return;
-                    }
+        $input = [
+            'vote' => trim((string) $request->input('vote')),
+            'comment' => filled($request->input('comment')) ? trim((string) $request->input('comment')) : null,
+        ];
 
-                    $words = str_word_count(trim((string) $value));
-
-                    if ($words > 50) {
-                        $fail('Comment cannot exceed 50 words.');
-                    }
-                },
-            ],
+        $validator = Validator::make($input, [
+            'vote' => ['required', Rule::in(['in_favor', 'against', 'abstain'])],
+            'comment' => ['nullable', 'string', 'max:1000', new WordCountBetween(0, 50, allowBlank: true)],
         ]);
 
         if ($validator->fails()) {
@@ -120,7 +113,7 @@ class BillController extends Controller
 
         $userVote = UserVote::updateOrCreate(
             ['user_id' => $user->id, 'bill_id' => $bill->id],
-            ['vote' => $request->vote, 'comment' => $request->comment]
+            ['vote' => $input['vote'], 'comment' => $input['comment']]
         );
 
         return response()->json(['message' => 'Vote recorded.', 'vote' => $userVote]);

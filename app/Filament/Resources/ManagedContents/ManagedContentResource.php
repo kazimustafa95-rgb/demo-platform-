@@ -49,18 +49,26 @@ class ManagedContentResource extends Resource
                     ->default(ManagedContent::AUDIENCE_GLOBAL),
                 TextInput::make('title')
                     ->required()
+                    ->minLength(5)
                     ->maxLength(255)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
                 Textarea::make('summary')
+                    ->maxLength(1000)
                     ->rows(3)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
                 Textarea::make('body')
                     ->required()
+                    ->minLength(20)
+                    ->maxLength(20000)
                     ->rows(10)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
                 TextInput::make('display_order')
                     ->numeric()
                     ->minValue(0)
+                    ->maxValue(9999)
                     ->default(0),
                 DateTimePicker::make('published_at'),
                 Toggle::make('is_published')

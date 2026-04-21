@@ -42,18 +42,23 @@ class AmendmentResource extends Resource
                     ->relationship('user', 'name')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->required()
+                    ->exists(table: \App\Models\User::class, column: 'id'),
                 Select::make('bill_id')
                     ->relationship('bill', 'number')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->required()
+                    ->exists(table: \App\Models\Bill::class, column: 'id'),
                 TextInput::make('category')
                     ->required()
-                    ->maxLength(255),
+                    ->minLength(2)
+                    ->maxLength(100)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
                 TextInput::make('support_count')
                     ->numeric()
                     ->minValue(0)
+                    ->maxValue(1000000)
                     ->required(),
                 Toggle::make('threshold_reached')
                     ->inline(false),
@@ -61,7 +66,10 @@ class AmendmentResource extends Resource
                     ->inline(false),
                 Textarea::make('amendment_text')
                     ->required()
+                    ->minLength(50)
+                    ->maxLength(5000)
                     ->rows(5)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
             ]);
     }

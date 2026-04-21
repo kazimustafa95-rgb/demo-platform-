@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Amendment;
 use App\Models\Bill;
 use App\Models\Setting;
+use App\Rules\WordCountBetween;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -47,19 +48,14 @@ class AmendmentController extends Controller
             return response()->json(['message' => 'This bill has already been voted on; amendments are closed.'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'amendment_text' => [
-                'required',
-                'string',
-                function (string $attribute, mixed $value, \Closure $fail): void {
-                    $words = str_word_count(trim((string) $value));
+        $input = [
+            'amendment_text' => trim((string) $request->input('amendment_text')),
+            'category' => trim((string) $request->input('category')),
+        ];
 
-                    if ($words < 50 || $words > 70) {
-                        $fail('Amendment text must be between 50 and 70 words.');
-                    }
-                },
-            ],
-            'category' => 'required|string',
+        $validator = Validator::make($input, [
+            'amendment_text' => ['required', 'string', 'max:5000', new WordCountBetween(50, 70)],
+            'category' => ['required', 'string', 'min:2', 'max:100'],
         ]);
 
         if ($validator->fails()) {
@@ -69,8 +65,8 @@ class AmendmentController extends Controller
         $amendment = $bill->amendments()->create([
             'source' => Amendment::SOURCE_USER,
             'user_id' => $user->id,
-            'amendment_text' => $request->amendment_text,
-            'category' => $request->category,
+            'amendment_text' => $input['amendment_text'],
+            'category' => $input['category'],
             'support_count' => 0,
         ]);
 

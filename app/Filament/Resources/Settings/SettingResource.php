@@ -10,8 +10,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -35,13 +36,15 @@ class SettingResource extends Resource
                 Select::make('key')
                     ->options(Setting::options())
                     ->searchable()
+                    ->live()
                     ->required()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(255),
-                Textarea::make('value')
+                    ->unique(ignoreRecord: true),
+                TextInput::make('value')
                     ->label('Value')
-                    ->rows(5)
-                    ->helperText('Use plain numeric values for thresholds and hours. Boolean-style settings may use 1/0 or true/false.')
+                    ->helperText(fn (Get $get): ?string => Setting::descriptionFor((string) $get('key'))
+                        ?? 'Use plain numeric values for thresholds and hours. Boolean-style settings may use 1/0 or true/false.')
+                    ->rules(fn (Get $get): array => Setting::validationRulesFor((string) $get('key')))
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
             ]);
     }

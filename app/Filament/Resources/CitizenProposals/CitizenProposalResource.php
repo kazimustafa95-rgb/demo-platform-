@@ -42,22 +42,25 @@ class CitizenProposalResource extends Resource
                     ->relationship('user', 'name')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->required()
+                    ->exists(table: \App\Models\User::class, column: 'id'),
                 TextInput::make('title')
                     ->required()
-                    ->maxLength(255),
+                    ->minLength(5)
+                    ->maxLength(255)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
                 TextInput::make('category')
                     ->required()
-                    ->maxLength(255),
+                    ->minLength(2)
+                    ->maxLength(100)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
                 Select::make('jurisdiction_focus')
-                    ->options([
-                        'federal' => 'Federal',
-                        'state' => 'State',
-                    ])
+                    ->options(CitizenProposal::focusOptions())
                     ->required(),
                 TextInput::make('support_count')
                     ->numeric()
                     ->minValue(0)
+                    ->maxValue(1000000)
                     ->required(),
                 Toggle::make('threshold_reached')
                     ->inline(false),
@@ -67,7 +70,10 @@ class CitizenProposalResource extends Resource
                     ->inline(false),
                 Textarea::make('content')
                     ->required()
+                    ->minLength(30)
+                    ->maxLength(5000)
                     ->rows(8)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
             ]);
     }
@@ -107,10 +113,7 @@ class CitizenProposalResource extends Resource
                         ->pluck('category', 'category')
                         ->all()),
                 SelectFilter::make('jurisdiction_focus')
-                    ->options([
-                        'federal' => 'Federal',
-                        'state' => 'State',
-                    ]),
+                    ->options(CitizenProposal::focusOptions()),
                 TernaryFilter::make('hidden'),
                 TernaryFilter::make('threshold_reached'),
             ])
