@@ -9,6 +9,9 @@ class CitizenProposal extends Model
 {
     use HasFactory;
 
+    public const JURISDICTION_FOCUS_FEDERAL = 'federal';
+    public const JURISDICTION_FOCUS_STATE = 'state';
+
     protected $fillable = [
         'user_id',
         'title',
@@ -42,5 +45,13 @@ class CitizenProposal extends Model
     public function reports()
     {
         return $this->morphMany(Report::class, 'reportable');
+    }
+
+    public static function focusOptions(): array
+    {
+        return [
+            self::JURISDICTION_FOCUS_FEDERAL => 'Federal',
+            self::JURISDICTION_FOCUS_STATE => 'State',
+        ];
     }
 }

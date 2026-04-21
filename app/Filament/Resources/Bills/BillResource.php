@@ -14,6 +14,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -36,36 +37,71 @@ class BillResource extends Resource
             ->components([
                 TextInput::make('external_id')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(191)
+                    ->unique(ignoreRecord: true)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
                 Select::make('jurisdiction_id')
                     ->relationship('jurisdiction', 'name')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->required()
+                    ->exists(table: \App\Models\Jurisdiction::class, column: 'id'),
                 TextInput::make('number')
                     ->required()
-                    ->maxLength(100),
+                    ->minLength(1)
+                    ->maxLength(100)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
                 Textarea::make('title')
                     ->required()
+                    ->minLength(5)
+                    ->maxLength(5000)
                     ->rows(3)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
                 Textarea::make('summary')
+                    ->maxLength(20000)
                     ->rows(6)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null)
                     ->columnSpanFull(),
                 Select::make('status')
-                    ->options([
-                        'active' => 'Active',
-                        'voting_closed' => 'Voting Closed',
-                        'passed' => 'Passed',
-                        'failed' => 'Failed',
-                    ])
+                    ->options(Bill::statusOptions())
                     ->required(),
-                DateTimePicker::make('introduced_date'),
-                DateTimePicker::make('official_vote_date'),
-                DateTimePicker::make('voting_deadline'),
+                DateTimePicker::make('introduced_date')
+                    ->seconds(false),
+                DateTimePicker::make('official_vote_date')
+                    ->seconds(false)
+                    ->rules([
+                        fn (Get $get): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                            $introducedDate = $get('introduced_date');
+
+                            if (blank($value) || blank($introducedDate)) {
+                                return;
+                            }
+
+                            if (strtotime((string) $value) < strtotime((string) $introducedDate)) {
+                                $fail('Official vote date must be on or after the introduced date.');
+                            }
+                        },
+                    ]),
+                DateTimePicker::make('voting_deadline')
+                    ->seconds(false)
+                    ->rules([
+                        fn (Get $get): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                            $introducedDate = $get('introduced_date');
+
+                            if (blank($value) || blank($introducedDate)) {
+                                return;
+                            }
+
+                            if (strtotime((string) $value) < strtotime((string) $introducedDate)) {
+                                $fail('Voting deadline must be on or after the introduced date.');
+                            }
+                        },
+                    ]),
                 TextInput::make('bill_text_url')
                     ->url()
-                    ->maxLength(2048),
+                    ->maxLength(2048)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? trim((string) $state) : null),
             ]);
     }
 
@@ -107,12 +143,7 @@ class BillResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->options([
-                        'active' => 'Active',
-                        'voting_closed' => 'Voting Closed',
-                        'passed' => 'Passed',
-                        'failed' => 'Failed',
-                    ]),
+                    ->options(Bill::statusOptions()),
                 SelectFilter::make('jurisdiction_id')
                     ->relationship('jurisdiction', 'name')
                     ->label('Jurisdiction'),
