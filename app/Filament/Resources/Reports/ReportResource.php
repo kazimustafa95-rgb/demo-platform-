@@ -38,27 +38,17 @@ class ReportResource extends Resource
                 TextInput::make('user_id')
                     ->required()
                     ->numeric(),
-                TextInput::make('reportable_type')
+                Select::make('reportable_type')
+                    ->options(Report::reportableTypeOptions())
                     ->required(),
                 TextInput::make('reportable_id')
                     ->required()
                     ->numeric(),
                 Select::make('reason')
-                    ->options([
-                        'spam' => 'Spam',
-                        'offensive' => 'Offensive',
-                        'joke' => 'Joke / Non-serious',
-                        'duplicate' => 'Duplicate',
-                        'other' => 'Other',
-                    ])
+                    ->options(Report::reasonOptions())
                     ->required(),
                 Select::make('status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'reviewed' => 'Reviewed',
-                        'dismissed' => 'Dismissed',
-                        'action_taken' => 'Action Taken',
-                    ])
+                    ->options(Report::statusOptions())
                     ->required(),
                 Textarea::make('description')
                     ->rows(4)
@@ -76,7 +66,7 @@ class ReportResource extends Resource
                     ->sortable(),
                 TextColumn::make('reportable_type')
                     ->label('Type')
-                    ->formatStateUsing(fn (string $state): string => class_basename($state))
+                    ->formatStateUsing(fn (mixed $state, Report $record): string => $record->reportableTypeLabel())
                     ->badge(),
                 TextColumn::make('reportable_id')
                     ->label('Content ID')
@@ -87,10 +77,10 @@ class ReportResource extends Resource
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'pending' => 'warning',
-                        'reviewed' => 'success',
-                        'dismissed' => 'gray',
-                        'action_taken' => 'danger',
+                        Report::STATUS_PENDING => 'warning',
+                        Report::STATUS_REVIEWED => 'success',
+                        Report::STATUS_DISMISSED => 'gray',
+                        Report::STATUS_ACTION_TAKEN => 'danger',
                         default => 'gray',
                     }),
                 TextColumn::make('created_at')
@@ -99,84 +89,73 @@ class ReportResource extends Resource
             ])
             ->filters([
                 SelectFilter::make('reason')
-                    ->options([
-                        'spam' => 'Spam',
-                        'offensive' => 'Offensive',
-                        'joke' => 'Joke / Non-serious',
-                        'duplicate' => 'Duplicate',
-                        'other' => 'Other',
-                    ]),
+                    ->options(Report::reasonOptions()),
                 SelectFilter::make('status')
-                    ->options([
-                        'pending' => 'Pending',
-                        'reviewed' => 'Reviewed',
-                        'dismissed' => 'Dismissed',
-                        'action_taken' => 'Action Taken',
-                    ]),
+                    ->options(Report::statusOptions()),
             ])
             ->recordActions([
                 Action::make('markReviewed')
                     ->label('Mark Reviewed')
                     ->color('success')
-                    ->visible(fn (Report $record): bool => $record->status !== 'reviewed')
-                    ->action(fn (Report $record) => $record->update(['status' => 'reviewed'])),
+                    ->visible(fn (Report $record): bool => $record->status !== Report::STATUS_REVIEWED)
+                    ->action(fn (Report $record) => $record->update(['status' => Report::STATUS_REVIEWED])),
                 Action::make('dismiss')
                     ->label('Dismiss')
                     ->color('gray')
-                    ->visible(fn (Report $record): bool => $record->status !== 'dismissed')
-                    ->action(fn (Report $record) => $record->update(['status' => 'dismissed'])),
+                    ->visible(fn (Report $record): bool => $record->status !== Report::STATUS_DISMISSED)
+                    ->action(fn (Report $record) => $record->update(['status' => Report::STATUS_DISMISSED])),
                 Action::make('hideContent')
                     ->label('Hide Content')
                     ->color('danger')
                     ->requiresConfirmation()
                     ->visible(function (Report $record): bool {
-                        $reportable = $record->reportable;
+                        $reportable = $record->resolvedReportable();
 
                         return $reportable && $reportable->isFillable('hidden') && !((bool) data_get($reportable, 'hidden'));
                     })
                     ->action(function (Report $record): void {
-                        $reportable = $record->reportable;
+                        $reportable = $record->resolvedReportable();
 
                         if (!$reportable || !$reportable->isFillable('hidden')) {
                             return;
                         }
 
                         $reportable->update(['hidden' => true]);
-                        $record->update(['status' => 'action_taken']);
+                        $record->update(['status' => Report::STATUS_ACTION_TAKEN]);
                     }),
                 Action::make('restoreContent')
                     ->label('Approve & Restore')
                     ->color('warning')
                     ->requiresConfirmation()
                     ->visible(function (Report $record): bool {
-                        $reportable = $record->reportable;
+                        $reportable = $record->resolvedReportable();
 
                         return $reportable && $reportable->isFillable('hidden') && ((bool) data_get($reportable, 'hidden'));
                     })
                     ->action(function (Report $record): void {
-                        $reportable = $record->reportable;
+                        $reportable = $record->resolvedReportable();
 
                         if (!$reportable || !$reportable->isFillable('hidden')) {
                             return;
                         }
 
                         $reportable->update(['hidden' => false]);
-                        $record->update(['status' => 'reviewed']);
+                        $record->update(['status' => Report::STATUS_REVIEWED]);
                     }),
                 Action::make('deleteContent')
                     ->label('Delete Content')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (Report $record): bool => $record->reportable !== null)
+                    ->visible(fn (Report $record): bool => $record->resolvedReportable() !== null)
                     ->action(function (Report $record): void {
-                        $reportable = $record->reportable;
+                        $reportable = $record->resolvedReportable();
 
                         if (!$reportable) {
                             return;
                         }
 
                         $reportable->delete();
-                        $record->update(['status' => 'action_taken']);
+                        $record->update(['status' => Report::STATUS_ACTION_TAKEN]);
                     }),
                 Action::make('suspendAuthor')
                     ->label('Suspend Author')
@@ -188,24 +167,28 @@ class ReportResource extends Resource
                         DateTimePicker::make('suspension_ends_at')
                             ->helperText('Leave blank for a permanent suspension.'),
                     ])
-                    ->visible(fn (Report $record): bool => (bool) $record->reportable?->user && !$record->reportable->user->isSuspended())
+                    ->visible(function (Report $record): bool {
+                        $author = $record->resolvedReportable()?->user;
+
+                        return (bool) $author && !$author->isSuspended();
+                    })
                     ->action(function (Report $record, array $data): void {
-                        $author = $record->reportable?->user;
+                        $author = $record->resolvedReportable()?->user;
 
                         if (!$author) {
                             return;
                         }
 
                         $author->suspend($data['reason'] ?? null, $data['suspension_ends_at'] ?? null);
-                        $record->update(['status' => 'action_taken']);
+                        $record->update(['status' => Report::STATUS_ACTION_TAKEN]);
                     }),
                 Action::make('restoreAuthor')
                     ->label('Restore Author')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (Report $record): bool => (bool) $record->reportable?->user?->isSuspended())
+                    ->visible(fn (Report $record): bool => (bool) $record->resolvedReportable()?->user?->isSuspended())
                     ->action(function (Report $record): void {
-                        $author = $record->reportable?->user;
+                        $author = $record->resolvedReportable()?->user;
 
                         if (!$author) {
                             return;
