@@ -27,6 +27,8 @@ class Representative extends Model
     protected $casts = [
         'contact_info' => 'array',
         'committee_assignments' => 'array',
+        'years_in_office_start' => 'integer',
+        'years_in_office_end' => 'integer',
     ];
 
     public function jurisdiction()
