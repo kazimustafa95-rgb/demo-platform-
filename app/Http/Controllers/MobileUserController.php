@@ -13,6 +13,7 @@ class MobileUserController extends Controller
     public function saveLocation(Request $request, LocationService $locationService)
     {
         $legacyAddress = trim((string) $request->input('address'));
+        
         $input = [
             'country' => trim((string) $request->input('country')),
             'state' => trim((string) $request->input('state')),
@@ -116,6 +117,7 @@ class MobileUserController extends Controller
             $longitude,
             $districtLookupAddress !== '' ? $districtLookupAddress : null
         );
+
         if (!$districts['federal_district'] || !$districts['state_district']) {
             $openStates = app(OpenStatesApi::class);
 
@@ -125,6 +127,7 @@ class MobileUserController extends Controller
                 'diagnostics' => [
                     'google_civic_partial_match' => filled($districts['federal_district'] ?? null)
                         && blank($districts['state_district'] ?? null),
+                    'lookup_failures' => $districts['lookup_diagnostics'] ?? [],
                     'openstates_quota_exceeded' => $openStates->isQuotaExceeded(),
                     'openstates_retry_available_after' => cache()->get('openstates:quota_exceeded_until'),
                 ],

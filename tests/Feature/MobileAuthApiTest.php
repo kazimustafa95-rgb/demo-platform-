@@ -559,6 +559,91 @@ class MobileAuthApiTest extends TestCase
             ]);
     }
 
+    public function test_location_verification_uses_google_representative_office_division_ids_when_divisions_are_missing(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 38.8977,
+                                'lng' => -77.0365,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'line1' => '1600 Pennsylvania Avenue Northwest',
+                    'city' => 'Washington',
+                    'state' => 'DC',
+                    'zip' => '20500',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/district:dc/cd:at-large' => [
+                        'name' => "District of Columbia's at-large congressional district",
+                    ],
+                    'ocd-division/country:us' => [
+                        'name' => 'United States',
+                    ],
+                    'ocd-division/country:us/district:dc' => [
+                        'name' => 'District of Columbia',
+                        'alsoKnownAs' => [
+                            'ocd-division/country:us/state:dc',
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
+                'normalizedInput' => [
+                    'state' => 'DC',
+                ],
+                'divisions' => [],
+                'offices' => [
+                    [
+                        'name' => 'Council of the District of Columbia Ward 2',
+                        'divisionId' => 'ocd-division/country:us/state:dc/ward:2',
+                    ],
+                ],
+            ]),
+            'https://v3.openstates.org/people.geo*' => Http::response([
+                'results' => [],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'District of Columbia',
+            'district' => 'Washington',
+            'street_address' => '1600 Pennsylvania Avenue NW',
+            'zip_code' => '20500',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'districts' => [
+                    'federal_district' => 'At-Large',
+                    'state_district' => 'DC-2',
+                    'state_code' => 'DC',
+                    'source' => 'google_civic+google_civic_representatives',
+                ],
+            ]);
+
+        Http::assertNotSent(function ($request) {
+            return str_starts_with($request->url(), 'https://v3.openstates.org/people.geo');
+        });
+    }
+
     public function test_location_verification_returns_quota_diagnostics_when_fallback_is_blocked(): void
     {
         $quotaUntil = now()->addHour()->toISOString();
@@ -589,10 +674,14 @@ class MobileAuthApiTest extends TestCase
                 ],
             ]),
             'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
-                'normalizedInput' => [
-                    'state' => 'DC',
+                'error' => [
+                    'message' => 'Method not found.',
                 ],
-                'divisions' => [],
+            ], 404),
+            'https://geocoding.geo.census.gov/geocoder/geographies/coordinates*' => Http::response([
+                'result' => [
+                    'geographies' => [],
+                ],
             ]),
         ]);
 
@@ -618,7 +707,7 @@ class MobileAuthApiTest extends TestCase
                     'federal_district' => 'At-Large',
                     'state_district' => null,
                     'state_code' => 'DC',
-                    'source' => 'google_civic+google_civic_representatives+open_states',
+                    'source' => 'google_civic+open_states',
                 ],
                 'diagnostics' => [
                     'google_civic_partial_match' => true,
@@ -626,5 +715,111 @@ class MobileAuthApiTest extends TestCase
                     'openstates_retry_available_after' => $quotaUntil,
                 ],
             ]);
+    }
+
+    public function test_location_verification_uses_census_geocoder_when_google_representatives_is_unavailable(): void
+    {
+        Http::fake([
+            'https://maps.googleapis.com/maps/api/geocode/json*' => Http::response([
+                'status' => 'OK',
+                'results' => [
+                    [
+                        'geometry' => [
+                            'location' => [
+                                'lat' => 38.8977,
+                                'lng' => -77.0365,
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/divisionsByAddress*' => Http::response([
+                'normalizedInput' => [
+                    'line1' => '1600 Pennsylvania Avenue Northwest',
+                    'city' => 'Washington',
+                    'state' => 'DC',
+                    'zip' => '20500',
+                ],
+                'divisions' => [
+                    'ocd-division/country:us/district:dc/cd:at-large' => [
+                        'name' => "District of Columbia's at-large congressional district",
+                    ],
+                    'ocd-division/country:us' => [
+                        'name' => 'United States',
+                    ],
+                    'ocd-division/country:us/district:dc' => [
+                        'name' => 'District of Columbia',
+                        'alsoKnownAs' => [
+                            'ocd-division/country:us/state:dc',
+                        ],
+                    ],
+                ],
+            ]),
+            'https://www.googleapis.com/civicinfo/v2/representatives*' => Http::response([
+                'error' => [
+                    'message' => 'Method not found.',
+                ],
+            ], 404),
+            'https://geocoding.geo.census.gov/geocoder/geographies/coordinates*' => Http::response([
+                'result' => [
+                    'input' => [
+                        'location' => [
+                            'x' => -77.0365,
+                            'y' => 38.8977,
+                        ],
+                    ],
+                    'geographies' => [
+                        'States' => [
+                            [
+                                'STATE' => '11',
+                                'NAME' => 'District of Columbia',
+                            ],
+                        ],
+                        '2024 State Legislative Districts - Upper' => [
+                            [
+                                'STATE' => '11',
+                                'NAME' => 'Ward 2',
+                            ],
+                        ],
+                        '119th Congressional Districts' => [
+                            [
+                                'STATE' => '11',
+                                'CD119' => '98',
+                                'NAME' => 'Delegate District (at Large)',
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'is_verified' => false,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/user/location', [
+            'country' => 'United States',
+            'state' => 'District of Columbia',
+            'district' => 'Washington',
+            'street_address' => '1600 Pennsylvania Avenue NW',
+            'zip_code' => '20500',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'districts' => [
+                    'federal_district' => 'At-Large',
+                    'state_district' => 'DC-2',
+                    'state_code' => 'DC',
+                    'source' => 'google_civic+census_geocoder',
+                ],
+            ]);
+
+        Http::assertNotSent(function ($request) {
+            return str_starts_with($request->url(), 'https://v3.openstates.org/people.geo');
+        });
     }
 }
