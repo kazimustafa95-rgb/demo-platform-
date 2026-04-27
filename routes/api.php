@@ -25,14 +25,26 @@ Route::prefix('auth')->group(function () {
 Route::get('/bills', [BillController::class, 'index']);
 Route::get('/bills/{bill}', [BillController::class, 'show']);
 Route::get('/bills/{bill}/amendments', [AmendmentController::class, 'index']);
+Route::get('/amendments', [AmendmentController::class, 'all']);
 Route::get('/amendments/{amendment}', [AmendmentController::class, 'show']);
 Route::get('/citizen-proposals', [CitizenProposalController::class, 'index']);
 Route::get('/citizen-proposals/{proposal}', [CitizenProposalController::class, 'show']);
 Route::get('/content', [ManagedContentController::class, 'index']);
+Route::get('/content/pages/{slug}', [ManagedContentController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'show']);
+    Route::post('/user', [UserController::class, 'update']);
     Route::put('/user', [UserController::class, 'update']);
+    Route::delete('/user', [UserController::class, 'destroy']);
+    Route::get('/user/privacy-settings', [UserController::class, 'privacySettings']);
+    Route::get('/user/email-preferences', [UserController::class, 'emailPreferences']);
+    Route::put('/user/email-preferences', [UserController::class, 'updateEmailPreferences']);
+    Route::get('/user/notification-preferences', [UserController::class, 'notificationPreferences']);
+    Route::put('/user/notification-preferences', [UserController::class, 'updateNotificationPreferences']);
+    Route::post('/user/notification-devices', [UserController::class, 'registerNotificationDevice']);
+    Route::delete('/user/notification-devices', [UserController::class, 'unregisterNotificationDevice']);
+    Route::post('/user/notification-test', [UserController::class, 'sendTestNotification']);
     Route::post('/user/location', [MobileUserController::class, 'saveLocation']);
     Route::post('/user/verify-location', [MobileUserController::class, 'saveLocation']);
 

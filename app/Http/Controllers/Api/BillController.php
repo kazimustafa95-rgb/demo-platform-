@@ -3,26 +3,24 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Amendment;
 use App\Models\Bill;
+use App\Models\Setting;
 use App\Models\UserVote;
+use App\Services\BillAiContentService;
 use App\Rules\WordCountBetween;
 use App\Services\BillInsightsService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class BillController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BillInsightsService $billInsightsService)
     {
-        $query = Bill::with('jurisdiction');
+        $query = Bill::query()->with('jurisdiction');
 
-        if ($request->has('jurisdiction')) {
-            $query->whereHas('jurisdiction', function ($q) use ($request) {
-                $q->where('code', $request->jurisdiction);
-            });
-        }
+        $this->applyJurisdictionFilters($query, $request);
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -33,20 +31,112 @@ class BillController extends Controller
                 ->where('voting_deadline', '>', now());
         }
 
+        $this->applySearchFilter($query, $request);
+
         $bills = $query->paginate(20);
+        $viewer = $request->user('sanctum') ?? $request->user();
+
+        $bills->setCollection(
+            $billInsightsService->attachCardStatsToCollection($bills->getCollection(), $viewer)
+        );
 
         return response()->json($bills);
     }
 
-    public function show(Bill $bill)
+    private function applyJurisdictionFilters(Builder $query, Request $request): void
     {
+        $jurisdiction = trim((string) $request->input('jurisdiction', ''));
+        $jurisdictionType = $this->normalizeJurisdictionType(
+            $request->input('jurisdiction_type', $request->input('type', $request->input('scope', $request->input('tab'))))
+        );
+
+        if ($jurisdiction !== '') {
+            $normalizedJurisdiction = strtolower($jurisdiction);
+
+            if (in_array($normalizedJurisdiction, ['federal', 'state'], true)) {
+                $jurisdictionType ??= $normalizedJurisdiction;
+            } else {
+                $query->whereHas('jurisdiction', function (Builder $jurisdictionQuery) use ($jurisdiction): void {
+                    $jurisdictionQuery->whereRaw('UPPER(code) = ?', [strtoupper($jurisdiction)]);
+                });
+            }
+        }
+
+        if ($jurisdictionType !== null) {
+            $query->whereHas('jurisdiction', function (Builder $jurisdictionQuery) use ($jurisdictionType): void {
+                $jurisdictionQuery->where('type', $jurisdictionType);
+            });
+        }
+    }
+
+    private function applySearchFilter(Builder $query, Request $request): void
+    {
+        $search = trim((string) $request->input('search', $request->input('q', $request->input('query', ''))));
+
+        if ($search === '') {
+            return;
+        }
+
+        $like = '%' . mb_strtolower($search) . '%';
+        $sponsorsExpression = $this->jsonColumnAsTextExpression($query, 'sponsors');
+
+        $query->where(function (Builder $searchQuery) use ($like, $sponsorsExpression): void {
+            $searchQuery->whereRaw('LOWER(number) LIKE ?', [$like])
+                ->orWhereRaw('LOWER(title) LIKE ?', [$like])
+                ->orWhereRaw('LOWER(COALESCE(summary, \'\')) LIKE ?', [$like])
+                ->orWhereRaw("LOWER(COALESCE({$sponsorsExpression}, '')) LIKE ?", [$like]);
+        });
+    }
+
+    private function jsonColumnAsTextExpression(Builder $query, string $column): string
+    {
+        return match ($query->getModel()->getConnection()->getDriverName()) {
+            'mysql', 'mariadb' => "CAST({$column} AS CHAR)",
+            default => "CAST({$column} AS TEXT)",
+        };
+    }
+
+    private function normalizeJurisdictionType(mixed $value): ?string
+    {
+        $type = strtolower(trim((string) $value));
+
+        return in_array($type, ['federal', 'state'], true) ? $type : null;
+    }
+
+    public function show(Bill $bill, BillAiContentService $billAiContentService)
+    {
+        $amendmentSupportThreshold = (int) Setting::get('amendment_threshold', 1000);
+
         $bill->load([
             'jurisdiction',
             'amendments' => function ($q) {
                 $q->userGenerated()
+                    ->with('user:id,name')
                     ->orderBy('support_count', 'desc')
                     ->limit(3);
             },
+        ]);
+
+        $bill->setRelation(
+            'amendments',
+            $bill->amendments->map(function ($amendment) use ($amendmentSupportThreshold) {
+                $amendment->setAttribute('support_threshold', $amendmentSupportThreshold);
+
+                return $amendment;
+            })
+        );
+
+        if ($billAiContentService->isConfigured() && $billAiContentService->needsGeneration($bill)) {
+            try {
+                $billAiContentService->generateAndStore($bill);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        $bill->makeVisible([
+            'ai_summary_plain',
+            'ai_bill_impact',
         ]);
 
         $userVote = auth()->check()

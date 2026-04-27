@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\SummaryText;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 
 class Bill extends Model
@@ -20,6 +22,8 @@ class Bill extends Model
         'number',
         'title',
         'summary',
+        'ai_summary_plain',
+        'ai_bill_impact',
         'status',
         'introduced_date',
         'official_vote_date',
@@ -40,6 +44,34 @@ class Bill extends Model
         'amendments_history' => 'array',
         'related_documents' => 'array',
     ];
+
+    protected $hidden = [
+        'ai_summary_plain',
+        'ai_bill_impact',
+    ];
+
+    protected function summary(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value): ?string => SummaryText::toPlainText($value),
+        );
+    }
+
+    protected function aiSummaryPlain(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value): ?string => SummaryText::toPlainTextLimited($value, 500),
+            set: fn (?string $value): ?string => SummaryText::toPlainTextLimited($value, 500),
+        );
+    }
+
+    protected function aiBillImpact(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value): ?string => SummaryText::toPlainTextLimited($value, 500),
+            set: fn (?string $value): ?string => SummaryText::toPlainTextLimited($value, 500),
+        );
+    }
 
     public function jurisdiction()
     {
@@ -73,7 +105,6 @@ class Bill extends Model
 
     public function isVotingOpen(): bool
     {
-        
         return (bool) ($this->voting_deadline && now()->lt($this->voting_deadline));
     }
 }

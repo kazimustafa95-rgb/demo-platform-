@@ -23,7 +23,54 @@ class DistrictPopulationService
             ];
         }
 
-        $population = DistrictPopulation::query()
+        $population = $this->findPopulationRecord($context);
+
+        if ($population) {
+            return [
+                'context' => $context,
+                'population' => $population->registered_voter_count,
+                'source' => [
+                    'provider' => $population->provider ?: config('services.district_population.provider', 'manual'),
+                    'reference' => $population->source_reference,
+                    'last_synced_at' => $population->last_synced_at?->toISOString(),
+                    'is_fallback' => false,
+                ],
+            ];
+        }
+
+        return [
+            'context' => $context,
+            'population' => $this->staticPopulationCount($context['jurisdiction_type']),
+            'source' => [
+                'provider' => 'static_demo',
+                'reference' => 'static:' . $context['district_key'],
+                'last_synced_at' => null,
+                'is_fallback' => true,
+            ],
+        ];
+    }
+
+    public function resolveFallbackForBill(Bill $bill): array
+    {
+        $bill->loadMissing('jurisdiction');
+
+        $jurisdictionType = strtolower(trim((string) $bill->jurisdiction?->type));
+
+        return [
+            'context' => null,
+            'population' => $this->staticPopulationCount($jurisdictionType),
+            'source' => [
+                'provider' => 'static_demo',
+                'reference' => 'static:' . ($jurisdictionType !== '' ? $jurisdictionType : 'default'),
+                'last_synced_at' => null,
+                'is_fallback' => true,
+            ],
+        ];
+    }
+
+    private function findPopulationRecord(array $context): ?DistrictPopulation
+    {
+        return DistrictPopulation::query()
             ->where('jurisdiction_type', $context['jurisdiction_type'])
             ->where('district', $context['district'])
             ->when(
@@ -32,16 +79,6 @@ class DistrictPopulationService
                 fn ($query) => $query->whereNull('state_code')
             )
             ->first();
-
-        return [
-            'context' => $context,
-            'population' => $population?->registered_voter_count,
-            'source' => $population ? [
-                'provider' => $population->provider ?: config('services.district_population.provider', 'manual'),
-                'reference' => $population->source_reference,
-                'last_synced_at' => $population->last_synced_at?->toISOString(),
-            ] : null,
-        ];
     }
 
     public function resolveDistrictContext(Bill $bill, User $user): ?array
@@ -125,5 +162,14 @@ class DistrictPopulationService
         }
 
         return preg_replace('/^' . preg_quote($stateCode, '/') . '[-\s]?/i', '', $stateDistrict) ?: $stateDistrict;
+    }
+
+    private function staticPopulationCount(string $jurisdictionType): int
+    {
+        return match (strtolower(trim($jurisdictionType))) {
+            'federal' => (int) config('services.district_population.static_federal_voters', 750000),
+            'state' => (int) config('services.district_population.static_state_voters', 250000),
+            default => (int) config('services.district_population.static_default_voters', 500000),
+        };
     }
 }

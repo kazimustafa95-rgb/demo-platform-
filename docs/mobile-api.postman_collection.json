@@ -355,7 +355,17 @@
               "query": [
                 {
                   "key": "jurisdiction",
-                  "value": "US",
+                  "value": "federal",
+                  "disabled": true
+                },
+                {
+                  "key": "jurisdiction_type",
+                  "value": "state",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "broadband",
                   "disabled": true
                 },
                 {
@@ -369,7 +379,8 @@
                   "disabled": true
                 }
               ]
-            }
+            },
+            "description": "List federal and state bills. Optional filters: jurisdiction, jurisdiction_type, search, status, and deadline. `jurisdiction` accepts exact codes like `US` or `CA`, plus `federal` and `state`. `search` also accepts the aliases `q` and `query`."
           }
         },
         {
@@ -395,7 +406,7 @@
               ],
               "query": []
             },
-            "description": "Fetch a bill with constituent totals, percentages, representative votes, top amendment proposals, and whether voting is still open."
+            "description": "Fetch a bill with constituent totals, percentages, representative votes, top amendment proposals, whether voting is still open, and the AI-generated `bill.ai_summary_plain` plus `bill.ai_bill_impact` fields. Both AI fields are plain text and capped at 500 characters. User-submitted amendments in `bill.amendments` also include `support_threshold`, pulled from the admin-configured amendment threshold setting."
           }
         },
         {
@@ -590,13 +601,13 @@
               ],
               "query": []
             },
-            "description": "Requires full constituent verification and a non-suspended account. Amendment text must be 50-70 words and amendments close once the bill has been officially voted.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"amendment_text\": \"Add a requirement that every implementing agency publish monthly progress updates, budget impacts, public meeting dates, and a plain-language summary before any final rule takes effect. This amendment improves transparency, gives residents time to respond, helps lawmakers compare promised outcomes with actual delivery, and creates a clear record of delays, costs, and measurable community impact.\",\n  \"category\": \"transparency\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
+              "description": "Requires full constituent verification and a non-suspended account. User amendments now require `title`, `amendment_text`, and `category`. `submitted_at` is set automatically, and amendment responses include `username` and `submitted_date` for mobile display. Amendment text must be 50-70 words and amendments close once the bill has been officially voted.",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"title\": \"Monthly transparency updates\",\n  \"amendment_text\": \"Add a requirement that every implementing agency publish monthly progress updates, budget impacts, public meeting dates, and a plain-language summary before any final rule takes effect. This amendment improves transparency, gives residents time to respond, helps lawmakers compare promised outcomes with actual delivery, and creates a clear record of delays, costs, and measurable community impact.\",\n  \"category\": \"transparency\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
                 }
               }
             },
@@ -617,6 +628,62 @@
     {
       "name": "Amendments",
       "item": [
+        {
+          "name": "List All Amendments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/amendments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "amendments"
+              ],
+              "query": [
+                {
+                  "key": "jurisdiction",
+                  "value": "federal",
+                  "disabled": true
+                },
+                {
+                  "key": "jurisdiction_type",
+                  "value": "state",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "active,passed",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "infrastructure,environment",
+                  "disabled": true
+                },
+                {
+                  "key": "popular",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "per_page",
+                  "value": "20",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all public user-submitted amendments with pagination. Optional filters: `jurisdiction`, `jurisdiction_type`, `status`, `category`, `popular`, and `per_page`. Multiple `status` and `category` values can be sent as comma-separated strings. Each item includes related `bill`, nested `bill.jurisdiction`, `username`, `submitted_date`, `support_threshold`, derived `status`, and `user_supported`."
+          }
+        },
         {
           "name": "Get Amendment Details",
           "request": {
@@ -743,8 +810,18 @@
               ],
               "query": [
                 {
+                  "key": "jurisdiction",
+                  "value": "federal",
+                  "disabled": true
+                },
+                {
+                  "key": "jurisdiction_type",
+                  "value": "state",
+                  "disabled": true
+                },
+                {
                   "key": "category",
-                  "value": "education",
+                  "value": "education,infrastructure",
                   "disabled": true
                 },
                 {
@@ -753,13 +830,28 @@
                   "disabled": true
                 },
                 {
+                  "key": "status",
+                  "value": "active,passed",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "transit",
+                  "disabled": true
+                },
+                {
                   "key": "popular",
                   "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "per_page",
+                  "value": "20",
                   "disabled": true
                 }
               ]
             },
-            "description": "List published citizen proposals. Optional filters: category, jurisdiction_focus, and popular."
+            "description": "List public citizen proposals with pagination. Optional filters: `jurisdiction`, `jurisdiction_type`, `jurisdiction_focus`, `status`, `category`, `search`, `popular`, and `per_page`. Multiple `status` and `category` values can be sent as comma-separated strings. Each item includes `username`, `submitted_date`, `support_threshold`, derived `status`, derived `jurisdiction_type`, `expires_at`, `days_left`, and `user_supported`."
           }
         },
         {
@@ -815,10 +907,10 @@
               ],
               "query": []
             },
-            "description": "Requires full constituent verification and a non-suspended account. Citizen proposals are auto-published, but they are rejected when they are too similar to real bills.",
+            "description": "Requires full constituent verification and a non-suspended account. Send `problem_statement` plus `proposed_solution` for the new mobile form, or the legacy `content` field for backward compatibility. Citizen proposals are auto-published, and the response now includes enriched fields like `username`, `submitted_date`, `support_threshold`, `status`, and `days_left`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Expand digital civic access\",\n  \"content\": \"Create a public digital access program that funds community internet hubs, device lending, and multilingual civic information for residents who cannot easily participate online. The program should prioritize underserved districts, publish usage metrics quarterly, and coordinate with schools, libraries, and local agencies.\",\n  \"category\": \"digital-access\",\n  \"jurisdiction_focus\": \"federal\"\n}",
+              "raw": "{\n  \"title\": \"Expand digital civic access\",\n  \"problem_statement\": \"Residents in underserved neighborhoods have limited access to reliable internet, devices, and multilingual civic information.\",\n  \"proposed_solution\": \"Create a public digital access program that funds community internet hubs, device lending, and multilingual civic outreach through libraries and schools.\",\n  \"category\": \"education\",\n  \"jurisdiction_focus\": \"federal\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -951,6 +1043,33 @@
             },
             "description": "Fetch published FAQs, guidelines, and announcements. Without filters the API groups the content by type; with type/audience filters it returns a flat items list."
           }
+        },
+        {
+          "name": "Get Content Page By Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/content/pages/{{content_page_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "content",
+                "pages",
+                "{{content_page_slug}}"
+              ],
+              "query": []
+            },
+            "description": "Fetch a single published managed content page by slug. Use this for pages like `privacy-policy` and `terms-of-service`."
+          }
         }
       ]
     },
@@ -1043,7 +1162,7 @@
               ],
               "type": "bearer"
             },
-            "description": "Fetch the authenticated mobile profile, including onboarding progress, identity verification status, and suspension details."
+              "description": "Fetch the authenticated mobile profile, including `profile_information`, `verification_status`, top-level `email_preferences`, top-level `push_notification_preferences`, onboarding progress, identity verification status, suspension details, and profile image URLs at `profile_photo_url`, `profile_image_url`, and `profile_information.profile_photo_url`."
           }
         },
         {
@@ -1075,7 +1194,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Mobile User\",\n  \"notification_preferences\": {\n    \"push\": true,\n    \"email\": false\n  }\n}",
+              "raw": "{\n  \"full_name\": \"Sarah J. Johnson\",\n  \"email\": \"sarah.updated@email.com\",\n  \"phone\": \"(555) 987-6543\",\n  \"street_address\": \"900 Civic Center Plaza\",\n  \"district\": \"Metro City\",\n  \"state\": \"California\",\n  \"zip_code\": \"90001\",\n  \"notification_preferences\": {\n    \"push\": true,\n    \"email\": false\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1092,9 +1211,471 @@
               ],
               "type": "bearer"
             },
-            "description": "Update the user's display name and notification preferences."
-          }
-        },
+              "description": "Update the authenticated user's profile information. Supports `name`/`full_name`, `email`, `phone_number`/`phone`, `address`/`street_address`, `country`, `state`, `district`, `zip_code`/`postal_code`, and `notification_preferences` for backward-compatible generic settings storage. For profile photos, use the separate multipart request below. Changing the email clears email verification until the new address is verified."
+            }
+          },
+          {
+            "name": "Update Profile With Image",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "full_name",
+                    "value": "Sarah J. Johnson",
+                    "type": "text"
+                  },
+                  {
+                    "key": "phone",
+                    "value": "(555) 987-6543",
+                    "type": "text"
+                  },
+                  {
+                    "key": "profile_image",
+                    "type": "file",
+                    "src": ""
+                  }
+                ]
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Upload or replace the current profile image using multipart form-data. Use `POST /api/user` for file uploads because raw multipart `PUT` uploads are not reliable in PHP. Send the image file as `profile_image`. To remove the image without uploading a new one, send `remove_profile_image=true` to the standard profile update endpoint."
+            }
+          },
+          {
+            "name": "Get Privacy Settings",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/privacy-settings",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "privacy-settings"
+                ],
+                "query": []
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Fetch the mobile Privacy Settings page payload, including privacy policy links and account/privacy control actions."
+            }
+          },
+          {
+            "name": "Get Email Preferences",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/email-preferences",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "email-preferences"
+                ],
+                "query": []
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Fetch the mobile-ready email preferences payload, including the summary copy, normalized toggle values, and section metadata for each email setting."
+            }
+          },
+          {
+            "name": "Update Email Preferences",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/email-preferences",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "email-preferences"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"account_updates\": true,\n  \"security_alerts\": true,\n  \"reminders\": true,\n  \"promotions\": false,\n  \"newsletter\": false\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Update one or more email-preference toggles. Supported fields are `account_updates`, `security_alerts`, `reminders`, `promotions`, and `newsletter`."
+            }
+          },
+          {
+            "name": "Get Notification Preferences",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/notification-preferences",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "notification-preferences"
+                ],
+                "query": []
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Fetch the mobile-ready push notification settings payload, including summary copy, normalized toggle values, and item metadata for each alert type."
+            }
+          },
+          {
+            "name": "Update Notification Preferences",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/notification-preferences",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "notification-preferences"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"bill_updates\": true,\n  \"significance_alerts\": true,\n  \"weekly_digest\": false,\n  \"proposal_activity\": true,\n  \"representative_updates\": false\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Update one or more push notification toggles. Supported fields are `bill_updates`, `significance_alerts`, `weekly_digest`, `proposal_activity`, and `representative_updates`."
+            }
+          },
+          {
+            "name": "Register Notification Device",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/notification-devices",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "notification-devices"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"device_token\": \"{{notification_device_token}}\",\n  \"platform\": \"ios\",\n  \"device_name\": \"iPhone 15\",\n  \"app_version\": \"1.0.0\",\n  \"notifications_enabled\": true\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Register or update the current device's FCM token for push notifications."
+            }
+          },
+          {
+            "name": "Remove Notification Device",
+            "request": {
+              "method": "DELETE",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/notification-devices",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "notification-devices"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"device_token\": \"{{notification_device_token}}\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Remove a previously registered FCM device token for the authenticated user."
+            }
+          },
+          {
+            "name": "Send Test Notification",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user/notification-test",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user",
+                  "notification-test"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"type\": \"bill_updates\",\n  \"title\": \"Bill status changed\",\n  \"body\": \"A bill you follow has moved forward.\",\n  \"device_token\": \"{{notification_device_token}}\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Send a Firebase Cloud Messaging test push to the authenticated user's registered device tokens. The selected notification type must be enabled for the user."
+            }
+          },
+          {
+            "name": "Delete Account",
+            "request": {
+              "method": "DELETE",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json",
+                  "type": "text"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "type": "text"
+                }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/user",
+                "host": [
+                  "{{base_url}}"
+                ],
+                "path": [
+                  "api",
+                  "user"
+                ],
+                "query": []
+              },
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"password\": \"{{mobile_password}}\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "auth": {
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{auth_token}}",
+                    "type": "string"
+                  }
+                ],
+                "type": "bearer"
+              },
+              "description": "Soft-delete the authenticated user account and revoke all active Sanctum tokens. Send either `password` or `current_password` to confirm the delete action."
+            }
+          },
         {
           "name": "Save Location (Manual)",
           "request": {
@@ -1379,6 +1960,11 @@
       "type": "string"
     },
     {
+      "key": "notification_device_token",
+      "value": "demo-fcm-device-token",
+      "type": "string"
+    },
+    {
       "key": "verification_code",
       "value": "",
       "type": "string"
@@ -1431,6 +2017,11 @@
     {
       "key": "content_audience",
       "value": "citizen_proposals",
+      "type": "string"
+    },
+    {
+      "key": "content_page_slug",
+      "value": "privacy-policy",
       "type": "string"
     }
   ]
