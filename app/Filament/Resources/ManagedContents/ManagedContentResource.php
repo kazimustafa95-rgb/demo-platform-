@@ -21,6 +21,8 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class ManagedContentResource extends Resource
 {
@@ -47,6 +49,12 @@ class ManagedContentResource extends Resource
                     ->options(ManagedContent::audienceOptions())
                     ->required()
                     ->default(ManagedContent::AUDIENCE_GLOBAL),
+                TextInput::make('slug')
+                    ->helperText('Optional page slug for direct mobile access, for example privacy-policy.')
+                    ->maxLength(160)
+                    ->dehydrateStateUsing(fn (mixed $state): ?string => filled($state) ? Str::slug((string) $state) : null)
+                    ->rule(fn (?ManagedContent $record) => Rule::unique('managed_contents', 'slug')->ignore($record?->id))
+                    ->columnSpanFull(),
                 TextInput::make('title')
                     ->required()
                     ->minLength(5)
@@ -84,6 +92,9 @@ class ManagedContentResource extends Resource
                 TextColumn::make('title')
                     ->searchable()
                     ->limit(60),
+                TextColumn::make('slug')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('type')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => ManagedContent::typeOptions()[$state] ?? ucfirst($state)),

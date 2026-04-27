@@ -52,6 +52,13 @@ return [
         'retry_delay_ms' => env('OPENSTATES_RETRY_DELAY_MS', 1500),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+        'bill_model' => env('OPENAI_BILL_MODEL', 'gpt-5.4-mini'),
+        'timeout_seconds' => env('OPENAI_TIMEOUT_SECONDS', 45),
+    ],
+
     'google_maps' => [
         'api_key' => env('GOOGLE_MAPS_API_KEY'),
     ],
@@ -60,6 +67,9 @@ return [
         'provider' => env('DISTRICT_POPULATION_PROVIDER', 'manual'),
         'api_key' => env('DISTRICT_POPULATION_API_KEY'),
         'base_url' => env('DISTRICT_POPULATION_BASE_URL'),
+        'static_federal_voters' => (int) env('DISTRICT_POPULATION_STATIC_FEDERAL_VOTERS', 750000),
+        'static_state_voters' => (int) env('DISTRICT_POPULATION_STATIC_STATE_VOTERS', 250000),
+        'static_default_voters' => (int) env('DISTRICT_POPULATION_STATIC_DEFAULT_VOTERS', 500000),
     ],
 
     'identity_verification' => [
@@ -68,6 +78,12 @@ return [
         'idenfy_api_key' => env('IDENFY_API_KEY'),
         'veryfi_client_id' => env('VERYFI_CLIENT_ID'),
         'veryfi_api_key' => env('VERYFI_API_KEY'),
+    ],
+
+    'firebase' => [
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'credentials_path' => env('FIREBASE_CREDENTIALS_PATH', 'storage/app/private/firebase/service-account.json'),
+        'timeout_seconds' => env('FIREBASE_TIMEOUT_SECONDS', 15),
     ],
 
 ];

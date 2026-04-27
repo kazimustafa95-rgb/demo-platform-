@@ -38,11 +38,13 @@ class CommunitySubmissionValidationTest extends TestCase
         Sanctum::actingAs($user);
 
         $response = $this->postJson("/api/bills/{$bill->id}/amendments", [
+            'title' => 'Plan',
             'amendment_text' => implode(' ', array_fill(0, 12, 'change')),
             'category' => 'A',
         ]);
 
         $response->assertStatus(422)
+            ->assertJsonPath('title.0', 'The title field must be at least 5 characters.')
             ->assertJsonPath('amendment_text.0', 'Amendment text must be between 50 and 70 words.')
             ->assertJsonPath('category.0', 'The category field must be at least 2 characters.');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,6 +17,8 @@ class CitizenProposal extends Model
         'user_id',
         'title',
         'content',
+        'problem_statement',
+        'proposed_solution',
         'category',
         'jurisdiction_focus',
         'support_count',
@@ -31,6 +34,25 @@ class CitizenProposal extends Model
         'is_duplicate' => 'boolean',
         'hidden' => 'boolean',
     ];
+
+    protected $appends = [
+        'username',
+        'submitted_date',
+    ];
+
+    protected function username(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->user?->name,
+        );
+    }
+
+    protected function submittedDate(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->created_at?->toDateString(),
+        );
+    }
 
     public function user()
     {

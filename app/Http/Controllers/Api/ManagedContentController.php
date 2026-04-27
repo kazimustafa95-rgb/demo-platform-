@@ -45,4 +45,16 @@ class ManagedContentController extends Controller
             'announcements' => $grouped->get(ManagedContent::TYPE_ANNOUNCEMENT, collect())->values(),
         ]);
     }
+
+    public function show(string $slug)
+    {
+        $item = ManagedContent::query()
+            ->published()
+            ->where('slug', trim($slug))
+            ->firstOrFail();
+
+        return response()->json([
+            'item' => $item,
+        ]);
+    }
 }
