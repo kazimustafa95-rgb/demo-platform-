@@ -1777,6 +1777,119 @@
           }
         },
         {
+          "name": "Start Identity Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/identity/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "identity",
+                "start"
+              ],
+              "query": []
+            },
+            "auth": {
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{auth_token}}",
+                  "type": "string"
+                }
+              ],
+              "type": "bearer"
+            },
+            "description": "Create or resume the authenticated user's Persona inquiry and return a one-time verification URL. When Persona is enabled, this is the next onboarding step after email and location verification."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.identity_verification?.inquiry_id) { pm.collectionVariables.set(\"persona_inquiry_id\", data.identity_verification.inquiry_id); }",
+                  "if (data.identity_verification?.verification_url) { pm.collectionVariables.set(\"persona_verification_url\", data.identity_verification.verification_url); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Identity Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/identity/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "identity",
+                "complete"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inquiry_id\": \"{{persona_inquiry_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{auth_token}}",
+                  "type": "string"
+                }
+              ],
+              "type": "bearer"
+            },
+            "description": "Sync the latest Persona inquiry result into the DEMOS backend. Pass the inquiry ID returned by the start endpoint, or leave the saved variable in place to reuse the most recent stored inquiry for the authenticated user."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.identity_verification?.inquiry_id) { pm.collectionVariables.set(\"persona_inquiry_id\", data.identity_verification.inquiry_id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "My Votes",
           "request": {
             "method": "GET",
@@ -2022,6 +2135,16 @@
     {
       "key": "content_page_slug",
       "value": "privacy-policy",
+      "type": "string"
+    },
+    {
+      "key": "persona_inquiry_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "persona_verification_url",
+      "value": "",
       "type": "string"
     }
   ]

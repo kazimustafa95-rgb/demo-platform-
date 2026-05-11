@@ -13,7 +13,7 @@ Import [docs/mobile-api.postman_collection.json](./mobile-api.postman_collection
 
 - Run `php artisan migrate` so the new `personal_access_tokens` table exists.
 - Update the collection `base_url` variable if your local URL is not `http://localhost`.
-- Voting, supporting, and submitting content still require a user with `is_verified = true`.
+- Voting, supporting, and submitting content require a fully verified constituent. With `IDENTITY_VERIFICATION_PROVIDER=manual`, the legacy `is_verified` flag still satisfies this requirement. With `IDENTITY_VERIFICATION_PROVIDER=persona`, users must complete Persona identity verification before participation unlocks.
 - For Firebase push notifications, set `FIREBASE_PROJECT_ID` and `FIREBASE_CREDENTIALS_PATH` in your environment before using the notification test endpoint or real device pushes.
 
 ## Bills filters
@@ -121,6 +121,8 @@ For profile image uploads, use `POST /api/user` with `multipart/form-data` and s
 
 Changing the email clears `email_verified_at`, so the updated profile will show `email_verified = false` until the new email is verified again. Location verification still uses `POST /api/user/location`.
 
+When `IDENTITY_VERIFICATION_PROVIDER=persona`, the mobile profile `next_step` changes to `verify_identity` after email and location are complete but before Persona approves the user.
+
 ## Account Settings
 
 `GET /api/user/privacy-settings` returns the mobile Privacy Settings page payload with:
@@ -154,6 +156,41 @@ The response returns the full normalized email-preferences payload after saving.
 `DELETE /api/user` soft-deletes the authenticated user account and revokes all Sanctum tokens. Send either `password` or `current_password` in the request body to confirm the delete action.
 
 `GET /api/content/pages/{slug}` returns a single published managed content page by slug. This is intended for pages like `privacy-policy` and `terms-of-service`, which can now be created and edited by admin from Managed Content with a direct page slug.
+
+## Identity Verification
+
+When `IDENTITY_VERIFICATION_PROVIDER=persona`, add these authenticated endpoints to the mobile flow after location is complete:
+
+- `POST /api/user/identity/start`
+- `POST /api/user/identity/complete`
+
+`POST /api/user/identity/start` creates or resumes the authenticated user's Persona inquiry and returns:
+
+- `identity_verification.provider`
+- `identity_verification.status`
+- `identity_verification.inquiry_id`
+- `identity_verification.verification_url`
+- `identity_verification.next_step`
+- `user` with the refreshed mobile profile payload
+
+Open `identity_verification.verification_url` in the app browser or webview.
+
+`POST /api/user/identity/complete` retrieves the current Persona inquiry status from the backend using either:
+
+- `inquiry_id`
+
+or the most recently stored inquiry for that user if the body is empty.
+
+The response returns:
+
+- `identity_verification.provider`
+- `identity_verification.status`
+- `identity_verification.verified`
+- `identity_verification.verified_at`
+- `identity_verification.inquiry_id`
+- `user` with the refreshed mobile profile payload
+
+If the Persona inquiry is `completed` or `approved`, the backend marks the user verified and voting, amendment submission, and proposal submission become available.
 
 ## Push Notification Preferences
 

@@ -144,8 +144,12 @@ class MobileUserController extends Controller
             'longitude' => $longitude,
             'federal_district' => $districts['federal_district'],
             'state_district' => $districts['state_district'],
-            'verified_at' => now(),
-            'is_verified' => true,
+            'verified_at' => $this->usesManualIdentityVerification()
+                ? now()
+                : $user->verified_at,
+            'is_verified' => $this->usesManualIdentityVerification()
+                ? true
+                : $user->is_verified,
         ]);
 
         $user = $user->fresh();
@@ -193,5 +197,10 @@ class MobileUserController extends Controller
             'street_address' => $streetAddress !== '' ? $streetAddress : ($result['formatted_address'] ?? null),
             'zip_code' => $lookup('postal_code'),
         ];
+    }
+
+    private function usesManualIdentityVerification(): bool
+    {
+        return strtolower(trim((string) config('services.identity_verification.provider', 'manual'))) === 'manual';
     }
 }

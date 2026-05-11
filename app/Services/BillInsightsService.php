@@ -247,11 +247,25 @@ class BillInsightsService
 
     private function applyVerifiedScope(Builder $query): void
     {
-        $query->whereNotNull('email_verified_at')
-            ->where(function (Builder $verifiedQuery) {
-                $verifiedQuery->whereNotNull('identity_verified_at')
-                    ->orWhere('is_verified', true);
-            });
+        $query->whereNotNull('email_verified_at');
+
+        if ($this->requiresExternalIdentityVerification()) {
+            $query->whereNotNull('identity_verified_at');
+
+            return;
+        }
+
+        $query->where(function (Builder $verifiedQuery) {
+            $verifiedQuery->whereNotNull('identity_verified_at')
+                ->orWhere('is_verified', true);
+        });
+    }
+
+    private function requiresExternalIdentityVerification(): bool
+    {
+        $provider = strtolower(trim((string) config('services.identity_verification.provider', 'manual')));
+
+        return $provider !== '' && $provider !== 'manual';
     }
 
     private function calculateMarginOfError(?float $proportion, int $sampleSize, ?int $populationSize): ?float

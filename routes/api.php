@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AmendmentController;
 use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\CitizenProposalController;
+use App\Http\Controllers\Api\IdentityVerificationController;
 use App\Http\Controllers\Api\ManagedContentController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\UserController;
@@ -40,6 +41,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/privacy-settings', [UserController::class, 'privacySettings']);
     Route::get('/user/email-preferences', [UserController::class, 'emailPreferences']);
     Route::put('/user/email-preferences', [UserController::class, 'updateEmailPreferences']);
+    Route::post('/user/identity/start', [IdentityVerificationController::class, 'start']);
+    Route::post('/user/identity/complete', [IdentityVerificationController::class, 'complete']);
     Route::get('/user/notification-preferences', [UserController::class, 'notificationPreferences']);
     Route::put('/user/notification-preferences', [UserController::class, 'updateNotificationPreferences']);
     Route::post('/user/notification-devices', [UserController::class, 'registerNotificationDevice']);
