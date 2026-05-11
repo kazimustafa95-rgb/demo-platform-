@@ -43,6 +43,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         'longitude',
         'federal_district',
         'state_district',
+        'state_lower_district',
+        'state_upper_district',
         'notification_preferences',
         'subscription_tier',
     ];
@@ -116,7 +118,12 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function hasCompletedLocation(): bool
     {
-        return filled($this->federal_district) && filled($this->state_district);
+        return filled($this->federal_district)
+            && (
+                filled($this->state_district)
+                || filled($this->state_lower_district)
+                || filled($this->state_upper_district)
+            );
     }
 
     public function isSuspended(): bool
@@ -268,6 +275,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
                 'longitude' => $this->longitude,
                 'federal_district' => $this->federal_district,
                 'state_district' => $this->state_district,
+                'state_lower_district' => $this->state_lower_district,
+                'state_upper_district' => $this->state_upper_district,
             ],
         ];
     }

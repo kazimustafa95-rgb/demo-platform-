@@ -14,6 +14,8 @@ Import [docs/mobile-api.postman_collection.json](./mobile-api.postman_collection
 - Run `php artisan migrate` so the new `personal_access_tokens` table exists.
 - Update the collection `base_url` variable if your local URL is not `http://localhost`.
 - Voting, supporting, and submitting content require a fully verified constituent. With `IDENTITY_VERIFICATION_PROVIDER=manual`, the legacy `is_verified` flag still satisfies this requirement. With `IDENTITY_VERIFICATION_PROVIDER=persona`, users must complete Persona identity verification before participation unlocks.
+- District insights read registered voter counts from `district_populations` when records exist. After configuring the Atlas env vars, run `php artisan demos:import-district-populations` to pull live district counts directly from Atlas stats with no export file. Use `--atlas-dataset=VM_DE` when an Atlas account has multiple applications, or keep `--atlas-export-id=...` / `--latest-atlas-export` for legacy export-based imports.
+- The current connected Atlas account is Delaware-only, so live Atlas-backed testing should use Delaware addresses or Delaware coordinates.
 - For Firebase push notifications, set `FIREBASE_PROJECT_ID` and `FIREBASE_CREDENTIALS_PATH` in your environment before using the notification test endpoint or real device pushes.
 
 ## Bills filters
@@ -36,6 +38,28 @@ Import [docs/mobile-api.postman_collection.json](./mobile-api.postman_collection
 Both are plain-text fields capped at 500 characters each. To backfill them for all stored bills after setting `OPENAI_API_KEY`, run `php artisan demos:generate-bill-ai`.
 
 For user-submitted amendments returned inside `bill.amendments`, the API also includes `support_threshold`, which is the admin-configured amendment support threshold.
+
+## Bill insights
+
+`GET /api/bills/{bill}/insights` returns the district-scoped insights payload for the authenticated user after location verification is complete.
+
+The response includes:
+
+- `district.registered_voter_count`
+- `district.chamber`
+- `district.population_source.provider`
+- `district.population_source.reference`
+- `district.population_source.last_synced_at`
+- `district.population_source.is_fallback`
+- vote totals, proportions, turnout, and confidence interval data
+
+For state bills, the API now resolves the authenticated user's chamber-specific district when possible:
+
+- `state_lower_district` for house or assembly bills
+- `state_upper_district` for senate bills
+- legacy `state_district` as a backward-compatible fallback
+
+If no imported district population record matches the user's district, the API falls back to the configured static demo counts and marks `population_source.is_fallback = true`. If `DISTRICT_POPULATION_PROVIDER=atlas_stats`, the app will first try a live Atlas sync for the user's state before falling back.
 
 ## Amendments
 
@@ -103,6 +127,8 @@ The create response now returns the same enriched proposal payload used by the l
 - `profile_information.residential_address`
 - `verification_status`
 - top-level `profile_photo_url` and `profile_image_url`
+- `location.state_lower_district`
+- `location.state_upper_district`
 
 `PUT /api/user` now supports these editable profile fields:
 
@@ -119,9 +145,9 @@ The create response now returns the same enriched proposal payload used by the l
 
 For profile image uploads, use `POST /api/user` with `multipart/form-data` and send the file as `profile_image`. Raw multipart `PUT` uploads are not reliable in PHP, so `PUT /api/user` should be used for normal JSON/text profile updates.
 
-Changing the email clears `email_verified_at`, so the updated profile will show `email_verified = false` until the new email is verified again. Location verification still uses `POST /api/user/location`.
+Changing the email clears `email_verified_at`, so the updated profile will show `email_verified = false` until the new email is verified again. Location verification still uses `POST /api/user/location`, and successful location responses now include `districts.state_lower_district` plus `districts.state_upper_district` alongside the legacy `districts.state_district`.
 
-When `IDENTITY_VERIFICATION_PROVIDER=persona`, the mobile profile `next_step` changes to `verify_identity` after email and location are complete but before Persona approves the user.
+When `IDENTITY_VERIFICATION_PROVIDER=persona`, the mobile profile `next_step` changes to `verify_identity` after email and location are complete but before Persona approves the user. The `POST /api/user/location` response follows the same behavior.
 
 ## Account Settings
 

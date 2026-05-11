@@ -144,6 +144,8 @@ class MobileUserController extends Controller
             'longitude' => $longitude,
             'federal_district' => $districts['federal_district'],
             'state_district' => $districts['state_district'],
+            'state_lower_district' => $districts['state_lower_district'] ?? null,
+            'state_upper_district' => $districts['state_upper_district'] ?? null,
             'verified_at' => $this->usesManualIdentityVerification()
                 ? now()
                 : $user->verified_at,

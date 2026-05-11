@@ -67,6 +67,12 @@ return [
         'provider' => env('DISTRICT_POPULATION_PROVIDER', 'manual'),
         'api_key' => env('DISTRICT_POPULATION_API_KEY'),
         'base_url' => env('DISTRICT_POPULATION_BASE_URL'),
+        'atlas' => [
+            'base_url' => env('DISTRICT_POPULATION_ATLAS_BASE_URL', 'https://www.l2datamapping.com'),
+            'username' => env('DISTRICT_POPULATION_ATLAS_USERNAME'),
+            'password' => env('DISTRICT_POPULATION_ATLAS_PASSWORD'),
+            'timeout_seconds' => env('DISTRICT_POPULATION_ATLAS_TIMEOUT_SECONDS', 30),
+        ],
         'static_federal_voters' => (int) env('DISTRICT_POPULATION_STATIC_FEDERAL_VOTERS', 750000),
         'static_state_voters' => (int) env('DISTRICT_POPULATION_STATIC_STATE_VOTERS', 250000),
         'static_default_voters' => (int) env('DISTRICT_POPULATION_STATIC_DEFAULT_VOTERS', 500000),

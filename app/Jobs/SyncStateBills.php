@@ -6,6 +6,7 @@ use App\Models\Bill;
 use App\Models\Jurisdiction;
 use App\Models\Setting;
 use App\Services\OpenStatesApi;
+use App\Support\LegislativeChamber;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -59,6 +60,7 @@ class SyncStateBills implements ShouldQueue
                     $bill = Bill::firstOrNew(['external_id' => $externalId]);
                     $bill->jurisdiction_id = $state->id;
                     $bill->number = (string) ($billData['identifier'] ?? $bill->number ?? $externalId);
+                    $bill->chamber = LegislativeChamber::inferFromBillNumber($bill->number) ?? $bill->chamber;
                     $bill->title = (string) ($billData['title'] ?? $bill->title ?? '');
 
                     $introducedDate = $billData['first_action_date'] ?? $billData['created_at'] ?? null;

@@ -6,6 +6,7 @@ use App\Models\Amendment;
 use App\Models\Bill;
 use App\Models\User;
 use App\Services\OpenStatesApi;
+use App\Support\LegislativeChamber;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -56,6 +57,7 @@ class SyncStateBillDetails implements ShouldQueue
         $amendmentsHistory = $this->extractAmendmentsHistory($details);
 
         $bill->update([
+            'chamber' => LegislativeChamber::inferFromOpenStates($details, (string) $bill->number) ?? $bill->chamber,
             'title' => $details['title'] ?? $bill->title,
             'summary' => $summary,
             'bill_text_url' => $billTextUrl,

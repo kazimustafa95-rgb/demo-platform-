@@ -7,6 +7,7 @@ use App\Models\DistrictPopulation;
 use App\Models\Jurisdiction;
 use App\Models\User;
 use App\Models\UserVote;
+use App\Services\AtlasDistrictPopulationSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -14,6 +15,13 @@ use Tests\TestCase;
 class BillInsightsApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('services.identity_verification.provider', 'manual');
+    }
 
     public function test_authenticated_user_can_fetch_district_scoped_bill_insights(): void
     {
@@ -144,6 +152,198 @@ class BillInsightsApiTest extends TestCase
             $payload['statistical_validity']['margin_of_error'],
             0.000001
         );
+    }
+
+    public function test_bill_insights_can_sync_live_atlas_population_when_configured(): void
+    {
+        config()->set('services.district_population.provider', 'atlas_stats');
+
+        $jurisdiction = Jurisdiction::firstOrCreate([
+            'type' => 'federal',
+            'code' => 'US',
+        ], [
+            'name' => 'Federal',
+        ]);
+
+        $bill = Bill::create([
+            'external_id' => 'HR-78-119',
+            'jurisdiction_id' => $jurisdiction->id,
+            'number' => 'HR 78',
+            'title' => 'Automatic Atlas Sync Act',
+            'status' => 'active',
+        ]);
+
+        $viewer = User::factory()->create([
+            'email_verified_at' => now(),
+            'is_verified' => true,
+            'verified_at' => now(),
+            'state' => 'California',
+            'federal_district' => '12',
+            'state_district' => 'CA-14',
+        ]);
+
+        UserVote::create([
+            'user_id' => $viewer->id,
+            'bill_id' => $bill->id,
+            'vote' => 'in_favor',
+        ]);
+
+        $this->mock(AtlasDistrictPopulationSyncService::class, function ($mock): void {
+            $mock->shouldReceive('sync')
+                ->once()
+                ->with(\Mockery::on(function (array $options): bool {
+                    return ($options['state_code'] ?? null) === 'CA'
+                        && ($options['provider'] ?? null) === 'atlas_stats';
+                }))
+                ->andReturnUsing(function (): array {
+                    DistrictPopulation::create([
+                        'jurisdiction_type' => 'federal',
+                        'state_code' => 'CA',
+                        'district' => '12',
+                        'registered_voter_count' => 812345,
+                        'provider' => 'atlas_stats',
+                        'source_reference' => 'atlas_stats:VM_CA',
+                        'last_synced_at' => now(),
+                    ]);
+
+                    return [];
+                });
+        });
+
+        Sanctum::actingAs($viewer);
+
+        $response = $this->getJson("/api/bills/{$bill->id}/insights");
+
+        $response->assertOk()
+            ->assertJsonPath('district.registered_voter_count', 812345)
+            ->assertJsonPath('district.population_source.provider', 'atlas_stats')
+            ->assertJsonPath('district.population_source.is_fallback', false)
+            ->assertJsonPath('statistical_validity.formula_inputs.N', 812345);
+    }
+
+    public function test_state_bill_insights_use_chamber_specific_districts_with_legacy_fallback(): void
+    {
+        $jurisdiction = Jurisdiction::firstOrCreate([
+            'type' => 'state',
+            'code' => 'CA',
+        ], [
+            'name' => 'California',
+        ]);
+
+        $bill = Bill::create([
+            'external_id' => 'SB-10-CA',
+            'jurisdiction_id' => $jurisdiction->id,
+            'number' => 'SB 10',
+            'chamber' => 'senate',
+            'title' => 'State Broadband Expansion Act',
+            'status' => 'active',
+        ]);
+
+        DistrictPopulation::create([
+            'jurisdiction_type' => 'state',
+            'state_code' => 'CA',
+            'district' => '8',
+            'chamber' => 'senate',
+            'registered_voter_count' => 100000,
+            'provider' => 'atlas_stats',
+            'source_reference' => 'atlas_stats:CA:senate:8',
+            'last_synced_at' => now(),
+        ]);
+
+        DistrictPopulation::create([
+            'jurisdiction_type' => 'state',
+            'state_code' => 'CA',
+            'district' => '14',
+            'chamber' => 'house',
+            'registered_voter_count' => 220000,
+            'provider' => 'atlas_stats',
+            'source_reference' => 'atlas_stats:CA:house:14',
+            'last_synced_at' => now(),
+        ]);
+
+        $viewer = User::factory()->create([
+            'email_verified_at' => now(),
+            'is_verified' => true,
+            'verified_at' => now(),
+            'state' => 'California',
+            'federal_district' => '12',
+            'state_district' => 'CA-14',
+            'state_lower_district' => 'CA-14',
+            'state_upper_district' => 'CA-8',
+        ]);
+
+        $sameSenateDistrictUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'is_verified' => true,
+            'verified_at' => now(),
+            'state' => 'California',
+            'federal_district' => '12',
+            'state_district' => 'CA-33',
+            'state_lower_district' => 'CA-33',
+            'state_upper_district' => 'CA-8',
+        ]);
+
+        $legacyMatchingUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'is_verified' => true,
+            'verified_at' => now(),
+            'state' => 'California',
+            'federal_district' => '12',
+            'state_district' => 'CA-8',
+            'state_lower_district' => null,
+            'state_upper_district' => null,
+        ]);
+
+        $differentSenateDistrictUser = User::factory()->create([
+            'email_verified_at' => now(),
+            'is_verified' => true,
+            'verified_at' => now(),
+            'state' => 'California',
+            'federal_district' => '12',
+            'state_district' => 'CA-14',
+            'state_lower_district' => 'CA-14',
+            'state_upper_district' => 'CA-9',
+        ]);
+
+        UserVote::create([
+            'user_id' => $viewer->id,
+            'bill_id' => $bill->id,
+            'vote' => 'in_favor',
+        ]);
+
+        UserVote::create([
+            'user_id' => $sameSenateDistrictUser->id,
+            'bill_id' => $bill->id,
+            'vote' => 'against',
+        ]);
+
+        UserVote::create([
+            'user_id' => $legacyMatchingUser->id,
+            'bill_id' => $bill->id,
+            'vote' => 'in_favor',
+        ]);
+
+        UserVote::create([
+            'user_id' => $differentSenateDistrictUser->id,
+            'bill_id' => $bill->id,
+            'vote' => 'against',
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $response = $this->getJson("/api/bills/{$bill->id}/insights");
+
+        $response->assertOk()
+            ->assertJsonPath('district.state_code', 'CA')
+            ->assertJsonPath('district.district', '8')
+            ->assertJsonPath('district.chamber', 'senate')
+            ->assertJsonPath('district.registered_voter_count', 100000)
+            ->assertJsonPath('participation.verified_participant_count', 3)
+            ->assertJsonPath('vote_totals.in_favor', 2)
+            ->assertJsonPath('vote_totals.against', 1)
+            ->assertJsonPath('district.population_source.provider', 'atlas_stats')
+            ->assertJsonPath('district.population_source.is_fallback', false)
+            ->assertJsonPath('statistical_validity.formula_inputs.N', 100000);
     }
 
     public function test_vote_endpoint_requires_constituent_verification(): void
