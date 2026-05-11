@@ -166,6 +166,10 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             return 'select_location';
         }
 
+        if ($this->requiresExternalIdentityVerification() && !$this->hasVerifiedIdentity()) {
+            return 'verify_identity';
+        }
+
         return 'complete';
     }
 
@@ -182,7 +186,23 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return $this->hasVerifiedEmail()
             && $this->hasCompletedLocation()
             && !$this->isSuspended()
-            && ($this->hasVerifiedIdentity() || $this->is_verified);
+            && $this->hasSatisfiedParticipationVerification();
+    }
+
+    private function hasSatisfiedParticipationVerification(): bool
+    {
+        if ($this->requiresExternalIdentityVerification()) {
+            return $this->hasVerifiedIdentity();
+        }
+
+        return $this->hasVerifiedIdentity() || $this->is_verified;
+    }
+
+    private function requiresExternalIdentityVerification(): bool
+    {
+        $provider = strtolower(trim((string) config('services.identity_verification.provider', 'manual')));
+
+        return $provider !== '' && $provider !== 'manual';
     }
 
     public function mobileProfile(): array

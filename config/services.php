@@ -75,6 +75,11 @@ return [
     'identity_verification' => [
         'provider' => env('IDENTITY_VERIFICATION_PROVIDER', 'manual'),
         'persona_api_key' => env('PERSONA_API_KEY'),
+        'persona_template_id' => env('PERSONA_TEMPLATE_ID'),
+        'persona_environment_id' => env('PERSONA_ENVIRONMENT_ID'),
+        'persona_webhook_secret' => env('PERSONA_WEBHOOK_SECRET'),
+        'persona_base_url' => env('PERSONA_BASE_URL', 'https://api.withpersona.com/api/v1'),
+        'persona_timeout_seconds' => env('PERSONA_TIMEOUT_SECONDS', 20),
         'idenfy_api_key' => env('IDENFY_API_KEY'),
         'veryfi_client_id' => env('VERYFI_CLIENT_ID'),
         'veryfi_api_key' => env('VERYFI_API_KEY'),
