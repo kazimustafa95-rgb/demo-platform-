@@ -19,6 +19,7 @@ class MobileAuthApiTest extends TestCase
     {
         parent::setUp();
 
+        config()->set('services.identity_verification.provider', 'manual');
         config()->set('services.open_states.request_interval_ms', 0);
         config()->set('services.google_maps.api_key', 'test-google-key');
     }

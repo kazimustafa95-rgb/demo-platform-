@@ -116,10 +116,22 @@ class CitizenProposalController extends Controller
             }
 
             if ($lowerFocus === 'state') {
-                $stateDistrict = strtoupper((string) ($user->state_district ?? ''));
+                $stateCode = collect([
+                    $user->state_district,
+                    $user->state_lower_district,
+                    $user->state_upper_district,
+                ])->map(function ($district): ?string {
+                    $stateDistrict = strtoupper(trim((string) $district));
 
-                if (preg_match('/^([A-Z]{2})[-\s]?/', $stateDistrict, $matches)) {
-                    $query->select('id')->from('jurisdictions')->where('code', $matches[1]);
+                    if (preg_match('/^([A-Z]{2})[-\s]?/', $stateDistrict, $matches) !== 1) {
+                        return null;
+                    }
+
+                    return $matches[1];
+                })->first(fn (?string $value) => $value !== null);
+
+                if ($stateCode !== null) {
+                    $query->select('id')->from('jurisdictions')->where('code', $stateCode);
                 } else {
                     $query->select('id')->from('jurisdictions')->whereRaw('1 = 0');
                 }

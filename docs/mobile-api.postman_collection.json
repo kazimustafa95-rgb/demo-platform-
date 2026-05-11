@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Demos Platform Mobile API",
-    "description": "Mobile-friendly Postman collection for Sanctum auth, onboarding, public content, and the current DEMOS API surface. Participation endpoints now require full constituent verification (email + location + identity/legacy verified status) and suspended accounts are blocked from login and engagement actions.",
+    "description": "Mobile-friendly Postman collection for Sanctum auth, onboarding, public content, and the current DEMOS API surface. Participation endpoints now require full constituent verification (email + location + identity/legacy verified status) and suspended accounts are blocked from login and engagement actions. District insights use imported `district_populations` counts when available, can auto-refresh from Atlas when `DISTRICT_POPULATION_PROVIDER=atlas_stats`, fall back to static demo counts otherwise, and now resolve chamber-aware lower or upper state districts for state bills.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -433,7 +433,7 @@
               ],
               "query": []
             },
-            "description": "Requires a user with completed location verification. Returns district-scoped participation, vote proportions, and statistical validity data for the selected bill.",
+            "description": "Requires a user with completed location verification. Returns district-scoped participation, vote proportions, and statistical validity data for the selected bill, including `district.registered_voter_count`, `district.chamber`, and `district.population_source` metadata. State bill insights now prefer `state_lower_district` for house or assembly bills and `state_upper_district` for senate bills, while still accepting legacy `state_district` users as fallback. Imported `district_populations` records override the static demo fallback when available, and Atlas-backed installs can auto-sync live counts before falling back.",
             "auth": {
               "bearer": [
                 {
@@ -1704,10 +1704,10 @@
               ],
               "query": []
             },
-            "description": "Complete onboarding with manually entered address fields. The API geocodes the address, resolves districts, and advances the user toward constituent verification.",
+            "description": "Complete onboarding with manually entered address fields. The API geocodes the address, resolves districts, returns `state_lower_district` and `state_upper_district` when available, and advances the user toward constituent verification. When `IDENTITY_VERIFICATION_PROVIDER=persona`, a successful response typically returns `next_step=verify_identity` instead of `complete`. For live Atlas testing with the current environment, use a Delaware address.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"country\": \"United States\",\n  \"state\": \"District of Columbia\",\n  \"district\": \"Washington\",\n  \"street_address\": \"1600 Pennsylvania Avenue NW\",\n  \"zip_code\": \"20500\"\n}",
+              "raw": "{\n  \"country\": \"United States\",\n  \"state\": \"Delaware\",\n  \"district\": \"Wilmington\",\n  \"street_address\": \"1007 N Orange St\",\n  \"zip_code\": \"19801\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1754,7 +1754,7 @@
               ],
               "query": []
             },
-            "description": "Complete onboarding with device coordinates. The API reverse geocodes the location, resolves districts, and advances the user toward constituent verification.",
+            "description": "Complete onboarding with device coordinates. The API reverse geocodes the location, resolves districts, returns `state_lower_district` and `state_upper_district` when available, and advances the user toward constituent verification. When `IDENTITY_VERIFICATION_PROVIDER=persona`, a successful response typically returns `next_step=verify_identity` instead of `complete`. For live Atlas testing with the current environment, use Delaware coordinates.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"latitude\": {{latitude}},\n  \"longitude\": {{longitude}}\n}",
@@ -2030,7 +2030,7 @@
               ],
               "type": "bearer"
             },
-            "description": "List federal and state representatives resolved from the user's stored districts."
+            "description": "List federal and state representatives resolved from the user's stored districts, including the chamber-aware lower and upper state districts when available."
           }
         }
       ]
@@ -2084,12 +2084,12 @@
     },
     {
       "key": "latitude",
-      "value": "38.8977",
+      "value": "39.7391",
       "type": "string"
     },
     {
       "key": "longitude",
-      "value": "-77.0365",
+      "value": "-75.5398",
       "type": "string"
     },
     {

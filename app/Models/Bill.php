@@ -20,6 +20,7 @@ class Bill extends Model
         'external_id',
         'jurisdiction_id',
         'number',
+        'chamber',
         'title',
         'summary',
         'ai_summary_plain',

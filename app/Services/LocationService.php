@@ -197,11 +197,14 @@ class LocationService
             }
         }
 
-        $stateDistrict = $stateLowerDistrict ?? $stateUpperDistrict ?? $stateAlternativeDistrict;
-
         return [
             'federal_district' => $federalDistrict,
-            'state_district' => $stateDistrict && $stateCode !== '' ? ($stateCode . '-' . $stateDistrict) : null,
+            'state_district' => $this->formatStateDistrict(
+                $stateCode,
+                $stateLowerDistrict ?? $stateUpperDistrict ?? $stateAlternativeDistrict
+            ),
+            'state_lower_district' => $this->formatStateDistrict($stateCode, $stateLowerDistrict),
+            'state_upper_district' => $this->formatStateDistrict($stateCode, $stateUpperDistrict),
             'state_code' => $stateCode !== '' ? $stateCode : null,
             'source' => $source,
             'lookup_diagnostics' => [],
@@ -319,9 +322,10 @@ class LocationService
             $stateEntry['STATE'] ?? $lowerEntry['STATE'] ?? $upperEntry['STATE'] ?? $congressionalEntry['STATE'] ?? null
         );
 
-        $stateDistrict = $this->normalizeCensusLegislativeDistrict(
+        $stateLowerDistrict = $this->normalizeCensusLegislativeDistrict(
             $lowerEntry['BASENAME'] ?? $lowerEntry['NAME'] ?? null
-        ) ?? $this->normalizeCensusLegislativeDistrict(
+        );
+        $stateUpperDistrict = $this->normalizeCensusLegislativeDistrict(
             $upperEntry['BASENAME'] ?? $upperEntry['NAME'] ?? null
         );
 
@@ -332,7 +336,12 @@ class LocationService
 
         return [
             'federal_district' => $federalDistrict,
-            'state_district' => $stateDistrict !== null && $stateCode !== null ? ($stateCode . '-' . $stateDistrict) : null,
+            'state_district' => $this->formatStateDistrict(
+                $stateCode,
+                $stateLowerDistrict ?? $stateUpperDistrict
+            ),
+            'state_lower_district' => $this->formatStateDistrict($stateCode, $stateLowerDistrict),
+            'state_upper_district' => $this->formatStateDistrict($stateCode, $stateUpperDistrict),
             'state_code' => $stateCode,
             'source' => 'census_geocoder',
             'lookup_diagnostics' => [],
@@ -484,7 +493,9 @@ class LocationService
         $people = $openStates->getPeopleByLocation($lat, $lng);
 
         $federalDistrict = null;
-        $stateDistrict = null;
+        $stateLowerDistrict = null;
+        $stateUpperDistrict = null;
+        $stateLegislativeDistrict = null;
         $stateCode = null;
 
         foreach ($people as $person) {
@@ -511,22 +522,42 @@ class LocationService
             }
 
             if ($district) {
-                $stateDistrict = $stateCode ? ($stateCode . '-' . $district) : $district;
+                $formattedDistrict = $this->formatStateDistrict($stateCode, (string) $district);
+                $classification = strtolower(trim((string) ($role['org_classification'] ?? '')));
+
+                if ($classification === 'lower') {
+                    $stateLowerDistrict ??= $formattedDistrict;
+                    continue;
+                }
+
+                if ($classification === 'upper') {
+                    $stateUpperDistrict ??= $formattedDistrict;
+                    continue;
+                }
+
+                $stateLegislativeDistrict ??= $formattedDistrict;
             }
         }
 
         return [
             'federal_district' => $federalDistrict,
-            'state_district' => $stateDistrict,
+            'state_district' => $stateLowerDistrict ?? $stateUpperDistrict ?? $stateLegislativeDistrict,
+            'state_lower_district' => $stateLowerDistrict,
+            'state_upper_district' => $stateUpperDistrict,
             'state_code' => $stateCode,
             'source' => 'open_states',
+            'lookup_diagnostics' => [],
         ];
     }
 
     private function hasRequiredDistricts(array $districts): bool
     {
         return filled($districts['federal_district'] ?? null)
-            && filled($districts['state_district'] ?? null);
+            && (
+                filled($districts['state_district'] ?? null)
+                || filled($districts['state_lower_district'] ?? null)
+                || filled($districts['state_upper_district'] ?? null)
+            );
     }
 
     private function mergeDistrictResults(array $primary, array $fallback): array
@@ -534,6 +565,8 @@ class LocationService
         return [
             'federal_district' => $primary['federal_district'] ?? $fallback['federal_district'] ?? null,
             'state_district' => $primary['state_district'] ?? $fallback['state_district'] ?? null,
+            'state_lower_district' => $primary['state_lower_district'] ?? $fallback['state_lower_district'] ?? null,
+            'state_upper_district' => $primary['state_upper_district'] ?? $fallback['state_upper_district'] ?? null,
             'state_code' => $primary['state_code'] ?? $fallback['state_code'] ?? null,
             'source' => $this->mergeSources($primary['source'] ?? null, $fallback['source'] ?? null),
             'lookup_diagnostics' => array_values(array_merge(
@@ -559,10 +592,24 @@ class LocationService
         return [
             'federal_district' => null,
             'state_district' => null,
+            'state_lower_district' => null,
+            'state_upper_district' => null,
             'state_code' => null,
             'source' => null,
             'lookup_diagnostics' => $diagnostics,
         ];
+    }
+
+    private function formatStateDistrict(?string $stateCode, ?string $district): ?string
+    {
+        $stateCode = strtoupper(trim((string) $stateCode));
+        $district = trim((string) $district);
+
+        if ($stateCode === '' || $district === '') {
+            return null;
+        }
+
+        return $stateCode . '-' . $district;
     }
 
     private function buildLookupFailureDiagnostic(string $source, Response $response): array

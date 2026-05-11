@@ -41,6 +41,7 @@ class BillInsightsService
                 'jurisdiction_type' => $context['jurisdiction_type'],
                 'state_code' => $context['state_code'],
                 'district' => $context['district'],
+                'chamber' => $context['chamber'] ?? null,
                 'district_key' => $context['district_key'],
                 'display_name' => $context['display_name'],
                 'registered_voter_count' => $analysis['population_size'],
@@ -237,12 +238,25 @@ class BillInsightsService
 
         if ($context['jurisdiction_type'] === 'federal') {
             $query->where('federal_district', $context['district'])
-                ->where('state_district', 'like', $context['state_code'] . '-%');
+                ->where(function (Builder $stateQuery) use ($context): void {
+                    foreach (['state_district', 'state_lower_district', 'state_upper_district'] as $field) {
+                        $stateQuery->orWhere($field, 'like', $context['state_code'] . '-%');
+                    }
+                });
 
             return;
         }
 
-        $query->where('state_district', $context['state_code'] . '-' . $context['district']);
+        $fullDistrict = $context['state_code'] . '-' . $context['district'];
+        $matchFields = is_array($context['district_match_fields'] ?? null)
+            ? array_values(array_unique($context['district_match_fields']))
+            : ['state_district'];
+
+        $query->where(function (Builder $districtQuery) use ($fullDistrict, $matchFields): void {
+            foreach ($matchFields as $field) {
+                $districtQuery->orWhere($field, $fullDistrict);
+            }
+        });
     }
 
     private function applyVerifiedScope(Builder $query): void

@@ -355,7 +355,6 @@ class UserController extends Controller
 
         $type = (string) $request->input('type');
         $preferences = $user->normalizedPushNotificationPreferences();
-
         if (($preferences[$type] ?? false) !== true) {
             return response()->json([
                 'message' => 'This notification type is currently disabled for the user.',
@@ -476,6 +475,8 @@ class UserController extends Controller
             'longitude' => $coords['lng'],
             'federal_district' => $districts['federal_district'],
             'state_district' => $districts['state_district'],
+            'state_lower_district' => $districts['state_lower_district'] ?? null,
+            'state_upper_district' => $districts['state_upper_district'] ?? null,
         ]);
 
         return response()->json(['message' => 'Location verified.', 'districts' => $districts]);
@@ -525,7 +526,7 @@ class UserController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->federal_district || !$user->state_district) {
+        if (!$user->federal_district || (!$user->state_district && !$user->state_lower_district && !$user->state_upper_district)) {
             return response()->json(['message' => 'User location not set.'], 400);
         }
 
@@ -534,11 +535,24 @@ class UserController extends Controller
         })->where('district', $user->federal_district)->get();
 
         $stateCode = null;
-        $stateDistrict = (string) $user->state_district;
-        $normalizedDistrict = preg_replace('/^[A-Z]{2}[-\s]?/i', '', $stateDistrict) ?: $stateDistrict;
+        $stateDistrictCandidates = collect([
+            $user->state_district,
+            $user->state_lower_district,
+            $user->state_upper_district,
+        ])->filter(fn ($value) => filled($value))
+            ->map(fn ($value) => (string) $value)
+            ->unique()
+            ->values();
+        $normalizedDistricts = $stateDistrictCandidates
+            ->map(fn (string $district) => preg_replace('/^[A-Z]{2}[-\s]?/i', '', $district) ?: $district)
+            ->unique()
+            ->values();
 
-        if (preg_match('/^([A-Z]{2})[-\s]?/i', $stateDistrict, $matches)) {
-            $stateCode = strtoupper($matches[1]);
+        foreach ($stateDistrictCandidates as $stateDistrictCandidate) {
+            if (preg_match('/^([A-Z]{2})[-\s]?/i', $stateDistrictCandidate, $matches)) {
+                $stateCode = strtoupper($matches[1]);
+                break;
+            }
         }
 
         if (!$stateCode && $user->latitude && $user->longitude) {
@@ -564,9 +578,14 @@ class UserController extends Controller
 
         $stateReps = $stateJurisdiction
             ? Representative::where('jurisdiction_id', $stateJurisdiction->id)
-                ->where(function ($query) use ($stateDistrict, $normalizedDistrict) {
-                    $query->where('district', $stateDistrict)
-                        ->orWhere('district', $normalizedDistrict);
+                ->where(function ($query) use ($stateDistrictCandidates, $normalizedDistricts) {
+                    foreach ($stateDistrictCandidates as $stateDistrict) {
+                        $query->orWhere('district', $stateDistrict);
+                    }
+
+                    foreach ($normalizedDistricts as $normalizedDistrict) {
+                        $query->orWhere('district', $normalizedDistrict);
+                    }
                 })
                 ->get()
             : collect();

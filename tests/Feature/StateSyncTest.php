@@ -88,10 +88,12 @@ class StateSyncTest extends TestCase
         $this->assertDatabaseHas('bills', [
             'external_id' => 'ocd-bill/al-1',
             'jurisdiction_id' => $jurisdiction->id,
+            'chamber' => 'house',
         ]);
         $this->assertDatabaseHas('bills', [
             'external_id' => 'ocd-bill/al-2',
             'jurisdiction_id' => $jurisdiction->id,
+            'chamber' => 'house',
         ]);
         Bus::assertDispatchedTimes(SyncStateBillDetails::class, 2);
     }
@@ -136,6 +138,7 @@ class StateSyncTest extends TestCase
         $this->assertDatabaseHas('bills', [
             'external_id' => 'ocd-bill/al-1',
             'jurisdiction_id' => $jurisdiction->id,
+            'chamber' => 'house',
         ]);
         $this->assertDatabaseMissing('bills', [
             'external_id' => 'ocd-bill/al-2',
@@ -283,6 +286,7 @@ class StateSyncTest extends TestCase
 
         $bill->refresh();
 
+        $this->assertSame('house', $bill->chamber);
         $this->assertSame('Education Reform Act', $bill->title);
         $this->assertStringContainsString('Plain-language summary', $bill->summary);
         $this->assertSame('https://legis.alabama.gov/bills/HB1.html', $bill->bill_text_url);

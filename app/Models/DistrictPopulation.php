@@ -13,6 +13,7 @@ class DistrictPopulation extends Model
         'jurisdiction_type',
         'state_code',
         'district',
+        'chamber',
         'registered_voter_count',
         'provider',
         'source_reference',
